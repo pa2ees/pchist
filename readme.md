@@ -9,7 +9,9 @@ Put `project-comphist.el` in the `load-path`.
 
 ## Usage ##
 
+Add the following to your configuration file:
 ```lisp
     (require 'project-comphist)
     (advice-add 'projectile-compile-project :override 'project-comphist-compile)
 ```
+Then when compiling using `C-x p c` it will prompt you for a compile command using persistent history
