@@ -3,7 +3,7 @@
 
 (defun projectile-comphist--load-history ()
   (interactive)
-  "Loads 'projectile-comphist-history' from persistent storage"
+  "Loads 'project-comphist-history' from persistent storage"
   (persist-defvar project-comphist-history nil
     "Contains the compile history for all projects")
   (persist-load 'project-comphist-history))
@@ -13,8 +13,8 @@
       project-root
     (projectile-project-root)))
 
-(defun projectile-comphist--get-projectile-comphist-entry (project-root)
-  (assoc project-root projectile-comphist-history))
+(defun projectile-comphist--get-project-comphist-entry (project-root)
+  (assoc project-root project-comphist-history))
 
 (defun projectile-comphist--set-project-comphist-entry (project-root project-history)
   (let ((project-history-entry (assoc project-root project-comphist-history)))
