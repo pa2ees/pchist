@@ -45,7 +45,8 @@
   (if (not (projectile-project-p))
       (message "Not in a projectile project!")
     (let* ((compile-command-list (projectile-comphist-get-compile-command-list (projectile-project-root)))
-           (selection (completing-read "Compile command: " compile-command-list)))
+           (selection (completing-read "Compile command: " compile-command-list))
+           (default-directory (projectile-project-root))) ;; this is necessary for the projectile-run-compilation command
       (projectile-comphist-add-compile-command selection (projectile-project-root)) ;; puts command first in list
       (projectile-run-compilation selection projectile-compile-use-comint-mode))))
 
