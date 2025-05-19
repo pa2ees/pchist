@@ -5,7 +5,11 @@ pchist requires [persist](https://elpa.gnu.org/packages/persist.html) and [proje
 
 ## Installation ##
 
-Put `pchist.el` in the `load-path`.
+Put `pchist.el` and associated files in the `load-path`.
+Or add the path like this:
+```lisp
+    (push "~/projects/pchist/" load-path)
+```
 
 ## Usage ##
 
@@ -14,4 +18,4 @@ Add the following to your configuration file:
     (require 'pchist)
     (advice-add 'projectile-compile-project :override 'pchist-compile)
 ```
-Then when compiling using `C-x p c` it will prompt you for a compile command using persistent history
+Then when compiling using `C-x p c c` it will prompt you for a compile command using persistent history
