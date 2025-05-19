@@ -458,4 +458,4 @@
   (projectile-comphist-create-command)
   (projectile-comphist-compile))
 
-(provide 'projectile-comphist-ui)
+(provide 'projectile-comphist-helm)
