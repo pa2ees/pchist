@@ -13,7 +13,7 @@
   (with-helm-alive-p
     (helm-set-pattern selection)))
 
-(defvar pchist--show-short-names-p nil
+(defvar pchist--show-short-names-p t
   "Determine how names are shown")
 
 (defun pchist--fc-transform (candidates _source)
@@ -72,20 +72,17 @@
         (message "No compile history found for project: %s" project-root)
       (let* ((display-strings (mapcar (lambda (cmd)
                                         (cons (pchist--format-command cmd pchist--show-short-names-p)  ; display with highlights
-                                              (pchist--format-command cmd nil))) ; actual value
+                                              cmd))
                                       commands)))
         (helm :sources
               (helm-build-sync-source "Manage Compile Commands"
                 :candidates display-strings
                 :action (list
-                         (cons "Copy to kill ring" #'kill-new)
+                         (cons "Copy to kill ring" (lambda (selection)
+                                                     (kill-new (pchist--format-command selection nil))))
                          (cons "Delete" (lambda (selection)
-                                           (let* ((index (cl-position selection display-strings :test #'string=))
-                                                  (cmd (nth index commands)))
-                                             (setf (plist-get (cdr entry) :commands)
-                                                   (remove cmd (plist-get (cdr entry) :commands)))
-                                             (pchist--save-history)
-                                             (message "Deleted command."))))))
+                                          (pchist-remove-structured-command selection project-root)
+                                          (message "Deleted command %s" (pchist--format-command selection t))))))
               :buffer "*Helm Manage Compile Commands*")))))
 
 

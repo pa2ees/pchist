@@ -48,8 +48,20 @@
   (let* ((project-root (pchist--get-project-root project-root))
          (entry (pchist--get-or-create-project-entry project-root))
          (commands (plist-get (cdr entry) :commands)))
+    ;; This works because "entry" and "commands" are mutable, and modify the original
+    ;; stored in pchist-structured-history
     (setq commands (cl-delete cmd-entry commands :test #'equal))
     (push cmd-entry commands)
+    (setf (plist-get (cdr entry) :commands) commands)
+    (pchist--save-history)))
+
+(defun pchist-remove-structured-command (cmd-entry &optional project-root)
+  "Remove CMD-ENTRY from the history of PROJECT-ROOT"
+  (pchist--load-history)
+  (let* ((project-root (pchist--get-project-root project-root))
+         (entry (pchist--get-or-create-project-entry project-root))
+         (commands (plist-get (cdr entry) :commands)))
+    (setq commands (cl-delete cmd-entry commands :test #'equal))
     (setf (plist-get (cdr entry) :commands) commands)
     (pchist--save-history)))
 
