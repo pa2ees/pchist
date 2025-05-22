@@ -184,15 +184,13 @@
                                                         (plist-get (cdr e) :commands))
                                                       pchist-structured-history))))))
 
-(defun pchist-target-candidates (command)
+(defun pchist-target-candidates (command project-root)
   "Return all unique targets used with the given COMMAND across all projects."
   (delete-dups (apply #'append
                       (mapcar (lambda (e)
                                 (when (equal (plist-get e :command) command)
                                   (plist-get e :targets)))
-                              (apply #'append (mapcar (lambda (e)
-                                                        (plist-get (cdr e) :commands))
-                                                      pchist-structured-history))))))
+                              (pchist--get-commands project-root)))))
 
 (defun pchist-follow-on-command-candidates ()
   "Return all unique follow-on command strings (:cmd) used across all projects."
@@ -272,9 +270,9 @@
         nil
       (plist-put command-entry :switches (append switches (list choice))))))
 
-(defun pchist--target-prompt (command-entry)
+(defun pchist--target-prompt (command-entry project-root)
   (let* ((command (plist-get command-entry :command))
-         (target-candidates (cons "<no more targets>" (pchist-target-candidates command)))
+         (target-candidates (cons "<no more targets>" (pchist-target-candidates command project-root)))
          (select-target-text (pchist--command-builder-text "target" command-entry '()))
          (targets (plist-get command-entry :targets))
          (choice (s-trim (helm-comp-read "Target: " target-candidates
@@ -404,7 +402,7 @@
       (let ((targets-done nil))
         (while (not targets-done)
           ;; prompt for single target
-          (let ((command-with-targets (pchist--target-prompt command-entry)))
+          (let ((command-with-targets (pchist--target-prompt command-entry project-root)))
             (if (null command-with-targets)
                 (setq targets-done t)
               (setq command-entry command-with-targets))))))
