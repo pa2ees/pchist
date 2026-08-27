@@ -47,7 +47,7 @@
       (should-not (string-match-p "/test/project/" formatted)))))
 
 (ert-deftest pchist2-ui-test-format-command-with-installers ()
-  "Test command formatting with installers."
+  "Test command formatting with installers including artifacts."
   (let ((cmd '((project . "/test/project/")
                (command . "./build.sh")
                (switches . nil)
@@ -59,7 +59,7 @@
                                (dest_path . "/remote/path/"))))
                (last_used . "2024-01-01T12:00:00.000000"))))
     (let ((formatted (pchist2-format-command cmd nil)))
-      (should (string-match-p "&&.*scp.*my_host:/remote/path/" formatted)))))
+      (should (string-match-p "&&.*scp.*build/foo\\.so.*my_host:/remote/path/" formatted)))))
 
 (ert-deftest pchist2-ui-test-format-command-with-local-installer ()
   "Test command formatting with local installer (no host)."
@@ -124,16 +124,13 @@
                    (pchist2-format-builder-state "./build.sh" '("-a" "x86_64") '("target1" "target2") nil))))
 
 (ert-deftest pchist2-builder-test-format-current-state-with-installers ()
-  "Test builder state formatting with installers."
-  (let ((installers '(((command . "scp")
-                       (artifacts . ("build/foo.so"))
-                       (host . "my_host")
-                       (dest_path . "/remote/path/"))))
-        (formatted (pchist2-format-builder-state "./build.sh" nil nil
+  "Test builder state formatting with installers including artifacts."
+  (let ((formatted (pchist2-format-builder-state "./build.sh" nil nil
                                                  '(((command . "scp")
+                                                    (artifacts . ("build/foo.so"))
                                                     (host . "my_host")
                                                     (dest_path . "/remote/path/"))))))
-    (should (string-match-p "./build.sh.*&&.*scp.*my_host:/remote/path/" formatted))))
+    (should (string-match-p "./build.sh.*&&.*scp.*build/foo\\.so.*my_host:/remote/path/" formatted))))
 
 (ert-deftest pchist2-builder-test-format-current-state-multiple-installers ()
   "Test builder state formatting with multiple installers."
@@ -174,13 +171,68 @@
     (should (string-match-p "target2" formatted))
     (should (string-match-p "&&.*scp.*my_host:/remote/path/" formatted))))
 
+(ert-deftest pchist2-ui-test-format-command-artifacts-order ()
+  "Test that artifacts appear between command and destination.
+Regression test for bug where artifacts were omitted."
+  (let ((cmd '((project . "/home/erik/projects/pchist/")
+               (command . "echo")
+               (switches . nil)
+               (targets . ("hello > /tmp/hellohello.txt"))
+               (installers . (((command . "cp")
+                               (switches . nil)
+                               (artifacts . ("/tmp/hellohello.txt"))
+                               (host . nil)
+                               (dest_path . "/tmp/plop.txt"))))
+               (last_used . "2026-08-27T11:13:36.410066"))))
+    (let ((formatted (pchist2-format-command cmd nil)))
+      ;; Should be: echo hello > /tmp/hellohello.txt && cp /tmp/hellohello.txt /tmp/plop.txt
+      (should (string-match-p "echo.*hello.*&&.*cp.*/tmp/hellohello\\.txt.*/tmp/plop\\.txt" formatted))
+      ;; Should NOT have installer before main command
+      (should-not (string-match-p "^\\[.*\\].*cp.*echo" formatted)))))
+
+;;; Command Execution String Tests
+
+(ert-deftest pchist2-ui-test-format-command-for-execution-no-prefix ()
+  "Test that execution format does not include project prefix."
+  (let ((cmd '((project . "/home/erik/projects/pchist/")
+               (command . "echo")
+               (switches . nil)
+               (targets . ("hello > /tmp/hellohello.txt"))
+               (installers . (((command . "cp")
+                               (switches . nil)
+                               (artifacts . ("/tmp/hellohello.txt"))
+                               (host . nil)
+                               (dest_path . "/tmp/plop.txt"))))
+               (last_used . "2026-08-27T11:13:36.410066"))))
+    (let ((exec-string (pchist2-format-command-for-execution cmd)))
+      ;; Should NOT have project prefix
+      (should-not (string-match-p "^\\[.*\\]" exec-string))
+      ;; Should have the actual command
+      (should (string-match-p "^echo" exec-string))
+      ;; Should be executable
+      (should (string= "echo hello > /tmp/hellohello.txt && cp /tmp/hellohello.txt /tmp/plop.txt"
+                       exec-string)))))
+
+(ert-deftest pchist2-ui-test-format-command-display-has-prefix ()
+  "Test that display format DOES include project prefix."
+  (let ((cmd '((project . "/home/erik/projects/pchist/")
+               (command . "echo")
+               (switches . nil)
+               (targets . nil)
+               (installers . nil)
+               (last_used . "2026-08-27T11:13:36.410066"))))
+    (let ((display-string (pchist2-format-command cmd nil)))
+      ;; Should have project prefix for display
+      (should (string-match-p "^\\[.*\\]" display-string)))))
+
 ;;; Integration Tests with Data Layer
 
 (ert-deftest pchist2-format-test-command-from-data-layer ()
   "Test formatting commands retrieved from data layer."
   (let ((pchist2--commands nil)
-        (pchist2--loaded t))
-    ;; Add a test command
+        (pchist2--loaded t)
+        (pchist2-storage-file "/tmp/pchist2-test-commands.json"))
+    ;; Add a test command (will save to test file)
     (pchist2-add-command "/test/project/"
                          "./build.sh"
                          '("-a" "x86_64")
@@ -192,7 +244,11 @@
            (formatted (pchist2-format-command cmd nil)))
       (should (string-match-p "\\[/test/project/\\].*build\\.sh.*-a.*x86_64.*test-target" formatted)))
     ;; Cleanup
-    (setq pchist2--commands nil)))
+    (setq pchist2--commands nil)
+    (when (file-exists-p "/tmp/pchist2-test-commands.json")
+      (delete-file "/tmp/pchist2-test-commands.json"))
+    (when (file-exists-p "/tmp/pchist2-test-commands.json.lock")
+      (delete-directory "/tmp/pchist2-test-commands.json.lock" t))))
 
 (provide 'pchist2-format-test)
 ;;; pchist2-format-test.el ends here

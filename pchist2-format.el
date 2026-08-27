@@ -40,14 +40,23 @@ If SHORT-PATHS is non-nil, show only basenames for project paths."
     ;; Add installer info
     (when installers
       (dolist (inst installers)
-        (let ((inst-cmd (alist-get 'command inst))
-              (host (alist-get 'host inst))
-              (dest (alist-get 'dest_path inst)))
+        (let* ((inst-cmd (alist-get 'command inst))
+               (artifacts (alist-get 'artifacts inst))
+               (host (alist-get 'host inst))
+               (dest (alist-get 'dest_path inst))
+               (inst-parts (list inst-cmd)))
+          ;; Add artifacts
+          (when artifacts
+            (setq inst-parts (append inst-parts artifacts)))
+          ;; Add destination
+          (when (or host dest)
+            (setq inst-parts (append inst-parts
+                                     (list (format "%s%s"
+                                                   (if host (concat host ":") "")
+                                                   (or dest ""))))))
+          ;; Build full installer string
           (setq parts (append parts
-                              (list (format "&& %s %s%s"
-                                            inst-cmd
-                                            (if host (concat host ":") "")
-                                            (or dest ""))))))))
+                              (list (concat "&& " (string-join inst-parts " "))))))))
 
     (format "[%s] %s" project-display (string-join parts " "))))
 
@@ -66,14 +75,65 @@ INSTALLERS is a list of installer alists."
       (setq parts (append parts targets)))
     (when installers
       (dolist (inst installers)
-        (let ((cmd (alist-get 'command inst))
-              (host (alist-get 'host inst))
-              (dest (alist-get 'dest_path inst)))
+        (let* ((cmd (alist-get 'command inst))
+               (artifacts (alist-get 'artifacts inst))
+               (host (alist-get 'host inst))
+               (dest (alist-get 'dest_path inst))
+               (inst-parts (list cmd)))
+          ;; Add artifacts
+          (when artifacts
+            (setq inst-parts (append inst-parts artifacts)))
+          ;; Add destination
+          (when (or host dest)
+            (setq inst-parts (append inst-parts
+                                     (list (format "%s%s"
+                                                   (if host (concat host ":") "")
+                                                   (or dest ""))))))
+          ;; Build full installer string
           (setq parts (append parts
-                              (list (format "&& %s %s%s"
-                                            cmd
-                                            (if host (concat host ":") "")
-                                            (or dest ""))))))))
+                              (list (concat "&& " (string-join inst-parts " "))))))))
+    (string-join parts " ")))
+
+;;; Command Execution String
+
+(defun pchist2-format-command-for-execution (cmd)
+  "Format CMD as an executable command string (no project prefix).
+This is the string that should be passed to the shell."
+  (let* ((command (alist-get 'command cmd))
+         (switches (alist-get 'switches cmd))
+         (targets (alist-get 'targets cmd))
+         (installers (alist-get 'installers cmd))
+         (parts (list command)))
+
+    ;; Add switches
+    (when switches
+      (setq parts (append parts switches)))
+
+    ;; Add targets
+    (when targets
+      (setq parts (append parts targets)))
+
+    ;; Add installer info
+    (when installers
+      (dolist (inst installers)
+        (let* ((inst-cmd (alist-get 'command inst))
+               (artifacts (alist-get 'artifacts inst))
+               (host (alist-get 'host inst))
+               (dest (alist-get 'dest_path inst))
+               (inst-parts (list inst-cmd)))
+          ;; Add artifacts
+          (when artifacts
+            (setq inst-parts (append inst-parts artifacts)))
+          ;; Add destination
+          (when (or host dest)
+            (setq inst-parts (append inst-parts
+                                     (list (format "%s%s"
+                                                   (if host (concat host ":") "")
+                                                   (or dest ""))))))
+          ;; Build full installer string
+          (setq parts (append parts
+                              (list (concat "&& " (string-join inst-parts " "))))))))
+
     (string-join parts " ")))
 
 ;;; Filter Descriptions

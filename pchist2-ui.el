@@ -67,9 +67,9 @@ If SHORT-PATHS is non-nil, show only basenames for project paths."
 
 (defun pchist2-ui--action-run (cmd)
   "Run the selected command CMD."
-  (let ((formatted (pchist2-ui--format-command cmd nil))
+  (let ((command-string (pchist2-format-command-for-execution cmd))
         (default-directory (alist-get 'project cmd)))
-    (projectile-run-compilation formatted)))
+    (projectile-run-compilation command-string)))
 
 (defun pchist2-ui--action-delete (cmd)
   "Delete the selected command CMD."
