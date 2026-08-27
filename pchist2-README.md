@@ -6,8 +6,11 @@ pchist2 is a complete rewrite of the pchist compile history system, providing ro
 
 ## Files
 
-- **pchist2-data.el** - Core data structures and CRUD operations (380 lines)
-- **pchist2-data-test.el** - Comprehensive ERT test suite (390 lines, 29 tests)
+- **pchist2.el** - Main entry point, loads all modules
+- **pchist2-data.el** - Core data structures and CRUD operations
+- **pchist2-ui.el** - Helm-based list interface for browsing and managing commands
+- **pchist2-ui-builder.el** - Interactive command builder with history-based suggestions
+- **pchist2-data-test.el** - Comprehensive ERT test suite (29 tests)
 
 ## Features
 
@@ -104,6 +107,29 @@ emacs -batch -l ert -l pchist2-data.el -l pchist2-data-test.el -f ert-run-tests-
 
 ## Example Usage
 
+### Interactive UI
+
+```elisp
+;; Load pchist2
+(require 'pchist2)
+
+;; Bind to a key (example)
+(global-set-key (kbd "C-x p c") #'pchist2-ui-select-command)
+
+;; Or call directly
+(pchist2-ui-select-command)
+```
+
+**Key bindings in selection interface:**
+- `RET` - Run the selected command
+- `C-c f` - Cycle filter (current project / specific project / global)
+- `C-c n` - Create new command
+- `C-c e` - Edit selected command
+- `C-c d` - Duplicate and modify selected command
+- `C-c k` - Delete selected command
+
+### Programmatic API
+
 ```elisp
 ;; Add a command
 (pchist2-add-command
@@ -156,18 +182,22 @@ Commands don't have explicit ID fields because:
 - `write-region` with 'excl (not available in Emacs 27.1)
 - `make-symbolic-link` (can have platform-specific issues)
 
-## Next Steps
+## Implementation Status
 
-This data layer is complete and tested. Next steps for pchist v2:
+### ✅ Complete
+- Data layer with JSON persistence and file locking
+- CRUD operations with automatic deduplication
+- Query helpers for suggestions
+- Comprehensive test suite (29 tests)
+- Helm-based UI for browsing and selecting commands
+- Interactive command builder with history-based suggestions
+- Filter modes (current project, specific project, global)
+- Command management (create, edit, duplicate, delete, run)
 
-1. **UI Layer** - Helm/completing-read interfaces for:
-   - Selecting commands from history
-   - Building new commands with suggestions
-   - Managing installers
-   
-2. **Integration** - Connect to compile/recompile commands
-
-3. **Migration** - Tool to import from pchist v1 (persist-based storage)
+### 🚧 Next Steps
+1. **Migration Tool** - Import from pchist v1 (persist-based storage)
+2. **Enhanced Installer UI** - More interactive installer builder
+3. **Emacs Integration** - Update `/home/erik/projects/emacs/init_projectile.el` to use pchist2
 
 ## Configuration
 
