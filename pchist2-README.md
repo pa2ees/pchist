@@ -8,11 +8,22 @@ pchist2 is a complete rewrite of the pchist compile history system, providing ro
 
 - **pchist2.el** - Main entry point, loads all modules
 - **pchist2-data.el** - Core data structures and CRUD operations
-- **pchist2-ui.el** - Helm-based list interface for browsing and managing commands
-- **pchist2-ui-builder.el** - Interactive command builder with history-based suggestions
+- **pchist2-ui-select.el** - Custom tabulated list interface for browsing commands
+- **pchist2-ui-edit.el** - Structured edit screen with field navigation
+- **pchist2-ui-completion.el** - Completion wrapper (works with any completion framework)
+- **pchist2-format.el** - Formatting utilities
 - **pchist2-data-test.el** - Comprehensive ERT test suite (29 tests)
 
 ## Features
+
+### User Interface
+
+- **Custom tabulated list** - Commands displayed in a clean table format
+- **Structured edit screen** - See all command parts at once, edit individual fields
+- **Framework-agnostic completion** - Works with Helm, Ivy, Vertico, Ido, or default completion
+- **Single-key commands** - Fast navigation and actions (like dired or magit)
+- **Visible keybindings** - Header shows available actions, no need to memorize
+- **No jarring transitions** - Completion happens in minibuffer, main view stays stable
 
 ### Data Structures
 
@@ -122,11 +133,19 @@ emacs -batch -l ert -l pchist2-data.el -l pchist2-data-test.el -f ert-run-tests-
 
 **Key bindings in selection interface:**
 - `RET` - Run the selected command
-- `C-c f` - Cycle filter (current project / specific project / global)
-- `C-c n` - Create new command
-- `C-c e` - Edit selected command
-- `C-c d` - Duplicate and modify selected command
-- `C-c k` - Delete selected command
+- `e` - Edit selected command
+- `d` - Duplicate and modify selected command
+- `k` - Delete selected command
+- `n` - Create new command
+- `f` - Cycle filter (current project / specific project / global)
+- `g` - Refresh list
+- `q` - Quit
+
+**Key bindings in edit screen:**
+- `RET` or `e` - Edit field at point
+- `n` / `p` or `TAB` / `Shift-TAB` - Navigate between fields
+- `C-c C-c` - Save changes
+- `C-c C-k` or `q` - Cancel
 
 ### Programmatic API
 
@@ -189,15 +208,17 @@ Commands don't have explicit ID fields because:
 - CRUD operations with automatic deduplication
 - Query helpers for suggestions
 - Comprehensive test suite (29 tests)
-- Helm-based UI for browsing and selecting commands
-- Interactive command builder with history-based suggestions
+- Custom tabulated list UI for browsing commands
+- Structured edit screen with field navigation
+- Framework-agnostic completion (works with any completion system)
 - Filter modes (current project, specific project, global)
 - Command management (create, edit, duplicate, delete, run)
+- No external dependencies except projectile and emacs 27.1+
 
 ### 🚧 Next Steps
 1. **Migration Tool** - Import from pchist v1 (persist-based storage)
-2. **Enhanced Installer UI** - More interactive installer builder
-3. **Emacs Integration** - Update `/home/erik/projects/emacs/init_projectile.el` to use pchist2
+2. **Emacs Integration** - Update `/home/erik/projects/emacs/init_projectile.el` to use pchist2
+3. **UI Polish** - Consider colors, faces, and visual indicators
 
 ## Configuration
 

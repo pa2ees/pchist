@@ -2,20 +2,22 @@
 
 ;; Author: Erik van Zwol
 ;; Version: 2.0.0
-;; Package-Requires: ((emacs "27.1") (helm "3.0") (projectile "2.0"))
+;; Package-Requires: ((emacs "27.1") (projectile "2.0"))
 ;; Keywords: tools, convenience, compile
 
 ;;; Commentary:
 
 ;; pchist2 provides a robust compile history system for managing project
-;; compile commands with a Helm-based UI.
+;; compile commands with a custom UI.
 ;;
 ;; Features:
 ;; - JSON-based persistent storage with file locking
 ;; - Automatic deduplication
-;; - Helm interface for browsing, creating, editing, and running commands
+;; - Custom tabulated interface for browsing and managing commands
+;; - Structured edit screen with field navigation
 ;; - Filter by current project, specific project, or global
 ;; - Support for installers (scp, rsync, etc.)
+;; - Works with any completion framework (Helm, Ivy, Vertico, etc.)
 ;;
 ;; Quick start:
 ;;   (require 'pchist2)
@@ -23,18 +25,21 @@
 ;;
 ;; Key bindings in selection interface:
 ;;   RET     - Run the selected command
-;;   C-c f   - Cycle filter (current / specific / global)
-;;   C-c n   - Create new command
-;;   C-c e   - Edit selected command
-;;   C-c d   - Duplicate and modify selected command
-;;   C-c k   - Delete selected command
+;;   e       - Edit selected command
+;;   d       - Duplicate and modify selected command
+;;   k       - Delete selected command
+;;   n       - Create new command
+;;   f       - Cycle filter (current / specific / global)
+;;   g       - Refresh list
+;;   q       - Quit
 
 ;;; Code:
 
 (require 'pchist2-data)
 (require 'pchist2-format)
-(require 'pchist2-ui)
-(require 'pchist2-ui-builder)
+(require 'pchist2-ui-select)
+(require 'pchist2-ui-edit)
+(require 'pchist2-ui-completion)
 
 ;;;###autoload
 (defalias 'pchist2-compile #'pchist2-ui-select-command
