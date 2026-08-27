@@ -14,9 +14,9 @@
 ;; - JSON-based persistent storage with file locking
 ;; - Automatic deduplication
 ;; - Custom tabulated interface for browsing and managing commands
-;; - Structured edit screen with field navigation
+;; - Structured edit screen with one-per-line display and inline editing
 ;; - Filter by current project, specific project, or global
-;; - Support for installers (scp, rsync, etc.)
+;; - Support for installers (scp, rsync, etc.) with full field editing
 ;; - Works with any completion framework (Helm, Ivy, Vertico, etc.)
 ;;
 ;; Quick start:
@@ -26,12 +26,21 @@
 ;; Key bindings in selection interface:
 ;;   RET     - Run the selected command
 ;;   e       - Edit selected command
+;;   c       - Create new command
 ;;   d       - Duplicate and modify selected command
 ;;   k       - Delete selected command
-;;   n       - Create new command
 ;;   f       - Cycle filter (current / specific / global)
 ;;   g       - Refresh list
 ;;   q       - Quit
+;;
+;; Key bindings in edit screen:
+;;   RET/e   - Edit field at point
+;;   a       - Add switch/target
+;;   i       - Add installer
+;;   k       - Delete item at point
+;;   n/p     - Navigate between fields
+;;   C-c C-c - Save changes
+;;   C-c C-k - Cancel
 
 ;;; Code:
 

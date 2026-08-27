@@ -18,12 +18,15 @@ pchist2 is a complete rewrite of the pchist compile history system, providing ro
 
 ### User Interface
 
-- **Custom tabulated list** - Commands displayed in a clean table format
-- **Structured edit screen** - See all command parts at once, edit individual fields
+- **Custom tabulated list** - Commands displayed in a clean table format with title and key help
+- **Structured edit screen** - See all command parts at once with live preview
+- **One-per-line display** - Switches, targets, and installers each on their own line
+- **Unrolled installers** - All installer fields visible and editable inline
 - **Framework-agnostic completion** - Works with Helm, Ivy, Vertico, Ido, or default completion
 - **Single-key commands** - Fast navigation and actions (like dired or magit)
-- **Visible keybindings** - Header shows available actions, no need to memorize
+- **Visible keybindings** - Footer shows available actions, no need to memorize
 - **No jarring transitions** - Completion happens in minibuffer, main view stays stable
+- **Artifact display** - Shows basename with full path in parentheses for clarity
 
 ### Data Structures
 
@@ -134,18 +137,21 @@ emacs -batch -l ert -l pchist2-data.el -l pchist2-data-test.el -f ert-run-tests-
 **Key bindings in selection interface:**
 - `RET` - Run the selected command
 - `e` - Edit selected command
+- `c` - Create new command
 - `d` - Duplicate and modify selected command
 - `k` - Delete selected command
-- `n` - Create new command
 - `f` - Cycle filter (current project / specific project / global)
 - `g` - Refresh list
 - `q` - Quit
 
 **Key bindings in edit screen:**
 - `RET` or `e` - Edit field at point
+- `a` - Add switch/target (context-sensitive)
+- `i` - Add installer
+- `k` - Delete item at point
 - `n` / `p` or `TAB` / `Shift-TAB` - Navigate between fields
 - `C-c C-c` - Save changes
-- `C-c C-k` or `q` - Cancel
+- `C-c C-k` or `q` - Cancel (no confirmation)
 
 ### Programmatic API
 

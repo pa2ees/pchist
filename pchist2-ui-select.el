@@ -33,9 +33,9 @@
     ;; Actions
     (define-key map (kbd "RET") #'pchist2-select-run)
     (define-key map (kbd "e") #'pchist2-select-edit)
+    (define-key map (kbd "c") #'pchist2-select-new)
     (define-key map (kbd "d") #'pchist2-select-duplicate)
     (define-key map (kbd "k") #'pchist2-select-delete)
-    (define-key map (kbd "n") #'pchist2-select-new)
     ;; Filter
     (define-key map (kbd "f") #'pchist2-select-cycle-filter)
     ;; Refresh
@@ -52,18 +52,8 @@
   (setq tabulated-list-format [("Command" 0 t)])
   (setq tabulated-list-padding 2)
   (setq tabulated-list-sort-key nil)
+  (setq buffer-read-only t)
   (add-hook 'tabulated-list-revert-hook #'pchist2-select--refresh nil t))
-
-;;; Header Line
-
-(defun pchist2-select--header-line ()
-  "Generate header line showing available actions and current filter."
-  (let ((filter-desc (pchist2-format-filter-description
-                      pchist2-select--filter
-                      pchist2-select--specific-project
-                      (projectile-project-root))))
-    (format "%s | RET:run e:edit d:dup k:del n:new f:filter g:refresh q:quit"
-            (propertize filter-desc 'face 'bold))))
 
 ;;; Data Retrieval
 
@@ -87,17 +77,42 @@
   "Get the command record at point."
   (tabulated-list-get-id))
 
-;;; Table Population
+;;; Buffer Rendering
 
 (defun pchist2-select--refresh ()
   "Refresh the command list."
-  (let ((commands (pchist2-select--get-filtered-commands)))
+  (let ((commands (pchist2-select--get-filtered-commands))
+        (inhibit-read-only t))
     (setq tabulated-list-entries
           (mapcar (lambda (cmd)
                     (list cmd (vector (pchist2-format-command cmd t))))
-                  commands)))
-  (tabulated-list-init-header)
-  (setq header-line-format '(:eval (pchist2-select--header-line))))
+                  commands))
+    (tabulated-list-init-header)
+
+    ;; Add header and footer
+    (save-excursion
+      (goto-char (point-min))
+      (let ((filter-desc (pchist2-format-filter-description
+                          pchist2-select--filter
+                          pchist2-select--specific-project
+                          (projectile-project-root))))
+        (insert (propertize "Select Command" 'face 'bold))
+        (insert "\n\n")
+        (insert (propertize "Filter: " 'face 'bold))
+        (insert filter-desc)
+        (insert "\n\n")
+        (insert (propertize (make-string 60 ?─) 'face 'shadow))
+        (insert "\n\n")))
+
+    ;; Add footer at end
+    (save-excursion
+      (goto-char (point-max))
+      (insert "\n")
+      (insert (propertize (make-string 60 ?─) 'face 'shadow))
+      (insert "\n\n")
+      (insert (propertize "Keys: " 'face 'bold))
+      (insert "RET:run  e:edit  c:create  d:dup  k:del  f:filter  g:refresh  q:quit")
+      (insert "\n"))))
 
 ;;; Interactive Commands
 
@@ -155,6 +170,9 @@
     (pchist2-edit-command nil nil project-root)
     (pchist2-select-refresh)))
 
+(defalias 'pchist2-select-create #'pchist2-select-new
+  "Alias for creating a new command.")
+
 (defun pchist2-select-cycle-filter ()
   "Cycle through filter modes."
   (interactive)
@@ -187,9 +205,9 @@
 Key bindings:
   RET - Run the selected command
   e   - Edit selected command
+  c   - Create new command
   d   - Duplicate and modify selected command
   k   - Delete selected command
-  n   - Create new command
   f   - Cycle filter (current project / global / specific project)
   g   - Refresh list
   q   - Quit"
