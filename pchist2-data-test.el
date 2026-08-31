@@ -287,12 +287,12 @@
                        (artifacts . ("build/foo.so"))
                        (host . "my_stack")
                        (dest_path . "/root/")))
-          (cmd (pchist2-add-command
-                "/proj1/"
-                "./build.sh"
-                '("-a" "x86_64" "-c release")
-                '("target1" "target2")
-                (list installer))))
+          (_cmd (pchist2-add-command
+                 "/proj1/"
+                 "./build.sh"
+                 '("-a" "x86_64" "-c release")
+                 '("target1" "target2")
+                 (list installer))))
      ;; Reset in-memory state
      (setq pchist2--commands nil)
      (setq pchist2--loaded nil)
