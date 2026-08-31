@@ -819,8 +819,63 @@ VALUE is the display value."
   (unless pchist2-edit--command
     (user-error "Command is required"))
 
+  ;; Build the new command structure
+  (let* ((new-cmd `((project . ,pchist2-edit--project)
+                    (command . ,pchist2-edit--command)
+                    (switches . ,pchist2-edit--switches)
+                    (targets . ,pchist2-edit--targets)
+                    (installers . ,pchist2-edit--installers)))
+         ;; Check for duplicates (excluding the original if we're editing)
+         (duplicate (pchist2--find-duplicate
+                     new-cmd
+                     (if pchist2-edit--original-cmd
+                         (cl-remove pchist2-edit--original-cmd pchist2--commands :test #'eq)
+                       pchist2--commands))))
+
+    (if duplicate
+        ;; Found a duplicate - prompt user
+        (let ((choice (read-char-choice
+                       (format "This command already exists. [d]elete duplicate and save, [s]ave anyway, [e]dit more, [c]ancel? ")
+                       '(?d ?s ?e ?c))))
+          (pcase choice
+            (?d
+             ;; Delete the duplicate and save our changes
+             (pchist2-delete-command duplicate)
+             (if pchist2-edit--original-cmd
+                 (progn
+                   (pchist2-update-command pchist2-edit--original-cmd
+                                          `((command . ,pchist2-edit--command)
+                                            (switches . ,pchist2-edit--switches)
+                                            (targets . ,pchist2-edit--targets)
+                                            (installers . ,pchist2-edit--installers)))
+                   (message "Duplicate deleted, command updated"))
+               (progn
+                 (pchist2-add-command pchist2-edit--project
+                                     pchist2-edit--command
+                                     pchist2-edit--switches
+                                     pchist2-edit--targets
+                                     pchist2-edit--installers)
+                 (message "Duplicate deleted, command saved")))
+             (pchist2-edit--exit-to-select))
+            (?s
+             ;; Save anyway (will create/update as duplicate)
+             (pchist2-edit--do-save)
+             (pchist2-edit--exit-to-select))
+            (?e
+             ;; Continue editing
+             (message "Continue editing..."))
+            (?c
+             ;; Cancel
+             (message "Save cancelled"))))
+      ;; No duplicate - save normally
+      (pchist2-edit--do-save)
+      (pchist2-edit--exit-to-select))))
+
+(defun pchist2-edit--do-save ()
+  "Perform the actual save operation."
   (if pchist2-edit--is-duplicate
       ;; Duplicate: always add as new
+      ;; First delete the duplicate if it exists (user changed it to match another)
       (progn
         (pchist2-add-command pchist2-edit--project
                             pchist2-edit--command
@@ -843,9 +898,10 @@ VALUE is the display value."
                             pchist2-edit--switches
                             pchist2-edit--targets
                             pchist2-edit--installers)
-        (message "Command saved"))))
+        (message "Command saved")))))
 
-  ;; Refresh and return to select screen
+(defun pchist2-edit--exit-to-select ()
+  "Exit to select screen and refresh."
   (let ((select-buffer (get-buffer "*pchist2-commands*")))
     (if select-buffer
         (progn
@@ -884,6 +940,17 @@ VALUE is the display value."
 
 ;;; Entry Point
 
+(defun pchist2-edit--deep-copy-installers (installers)
+  "Deep copy INSTALLERS list to avoid modifying the original."
+  (when installers
+    (mapcar (lambda (inst)
+              `((command . ,(alist-get 'command inst))
+                (switches . ,(copy-sequence (alist-get 'switches inst)))
+                (artifacts . ,(copy-sequence (alist-get 'artifacts inst)))
+                (host . ,(alist-get 'host inst))
+                (dest_path . ,(alist-get 'dest_path inst))))
+            installers)))
+
 (defun pchist2-edit-command (cmd &optional duplicate project-root)
   "Edit command CMD in a structured editor.
 If DUPLICATE is non-nil, treat as a duplicate operation.
@@ -901,9 +968,11 @@ If CMD is nil and PROJECT-ROOT is provided, create a new command."
           (progn
             (setq pchist2-edit--project (alist-get 'project cmd))
             (setq pchist2-edit--command (alist-get 'command cmd))
-            (setq pchist2-edit--switches (alist-get 'switches cmd))
-            (setq pchist2-edit--targets (alist-get 'targets cmd))
-            (setq pchist2-edit--installers (alist-get 'installers cmd)))
+            ;; Deep copy lists to avoid modifying the original
+            (setq pchist2-edit--switches (copy-sequence (alist-get 'switches cmd)))
+            (setq pchist2-edit--targets (copy-sequence (alist-get 'targets cmd)))
+            (setq pchist2-edit--installers (pchist2-edit--deep-copy-installers
+                                            (alist-get 'installers cmd))))
         ;; New command
         (setq pchist2-edit--project project-root)
         (setq pchist2-edit--command nil)
