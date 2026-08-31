@@ -18,15 +18,28 @@ pchist2 is a complete rewrite of the pchist compile history system, providing ro
 
 ### User Interface
 
-- **Custom tabulated list** - Commands displayed in a clean table format with title and key help
-- **Structured edit screen** - See all command parts at once with live preview
-- **One-per-line display** - Switches, targets, and installers each on their own line
-- **Unrolled installers** - All installer fields visible and editable inline
-- **Framework-agnostic completion** - Works with Helm, Ivy, Vertico, Ido, or default completion
-- **Single-key commands** - Fast navigation and actions (like dired or magit)
-- **Visible keybindings** - Footer shows available actions, no need to memorize
-- **No jarring transitions** - Completion happens in minibuffer, main view stays stable
-- **Artifact display** - Shows basename with full path in parentheses for clarity
+**Select Screen:**
+- Header with title, command preview, and filter status
+- Smart display: only shows projects when multiple exist
+- Full path toggle (F) for detailed vs. compact view
+- Collapsible help with `?` key
+- Clear all with confirmation (`K`)
+- Duplicate to current project (`D`)
+
+**Edit Screen:**
+- Tight, compact layout with live preview
+- One-per-line display for switches, targets, installers
+- Unrolled installers with all fields inline
+- Context-aware `a`/`k` keys (add/delete based on location)
+- Navigation stops on installer headers for easy deletion
+- Collapsible help with `?` key
+- Artifact display shows basename with full path in parentheses
+
+**General:**
+- Framework-agnostic completion (works with Helm, Ivy, Vertico, Ido, etc.)
+- Single-key commands (like dired or magit)
+- No jarring transitions - completion stays in minibuffer
+- Consistent styling between screens
 
 ### Data Structures
 
@@ -139,17 +152,21 @@ emacs -batch -l ert -l pchist2-data.el -l pchist2-data-test.el -f ert-run-tests-
 - `e` - Edit selected command
 - `c` - Create new command
 - `d` - Duplicate and modify selected command
+- `D` - Duplicate to current project
 - `k` - Delete selected command
+- `K` - Clear all commands (with confirmation)
 - `f` - Cycle filter (current project / specific project / global)
+- `F` - Toggle full paths display
+- `?` - Toggle help
 - `g` - Refresh list
 - `q` - Quit
 
 **Key bindings in edit screen:**
 - `RET` or `e` - Edit field at point
-- `a` - Add switch/target (context-sensitive)
-- `i` - Add installer
-- `k` - Delete item at point
+- `a` - Add item (context-aware: switch/target/installer part)
+- `k` - Delete item at point (context-aware)
 - `n` / `p` or `TAB` / `Shift-TAB` - Navigate between fields
+- `?` - Toggle help
 - `C-c C-c` - Save changes
 - `C-c C-k` or `q` - Cancel (no confirmation)
 

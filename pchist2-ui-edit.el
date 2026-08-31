@@ -16,6 +16,9 @@
 (require 'pchist2-format)
 (require 'cl-lib)
 
+;; Forward declarations
+(declare-function pchist2-complete "pchist2-ui-completion")
+
 ;;; Edit State
 
 (defvar-local pchist2-edit--original-cmd nil
@@ -39,6 +42,9 @@
 (defvar-local pchist2-edit--installers nil
   "List of installer records.")
 
+(defvar-local pchist2-edit--help-visible nil
+  "Non-nil if help section is visible.")
+
 ;;; Mode Definition
 
 (defvar pchist2-edit-mode-map
@@ -46,12 +52,12 @@
     (define-key map (kbd "RET") #'pchist2-edit-modify-at-point)
     (define-key map (kbd "e") #'pchist2-edit-modify-at-point)
     (define-key map (kbd "a") #'pchist2-edit-add-at-point)
-    (define-key map (kbd "i") #'pchist2-edit-add-installer)
     (define-key map (kbd "k") #'pchist2-edit-delete-at-point)
     (define-key map (kbd "n") #'pchist2-edit-next-field)
     (define-key map (kbd "p") #'pchist2-edit-previous-field)
     (define-key map (kbd "TAB") #'pchist2-edit-next-field)
     (define-key map (kbd "<backtab>") #'pchist2-edit-previous-field)
+    (define-key map (kbd "?") #'pchist2-edit-toggle-help)
     (define-key map (kbd "C-c C-c") #'pchist2-edit-save)
     (define-key map (kbd "C-c C-k") #'pchist2-edit-cancel)
     (define-key map (kbd "q") #'pchist2-edit-cancel)
@@ -73,12 +79,12 @@
         (pos (point)))
     (erase-buffer)
 
-    ;; Header
+    ;; Title
     (insert (propertize "Edit Command" 'face 'bold))
     (insert "\n\n")
 
     ;; Command preview
-    (insert (propertize "Preview: " 'face 'shadow))
+    (insert (propertize "Preview: " 'face 'italic))
     (insert (pchist2-format-builder-state
              pchist2-edit--command
              pchist2-edit--switches
@@ -86,60 +92,48 @@
              pchist2-edit--installers))
     (insert "\n\n")
 
-    ;; Separator
-    (insert (propertize (make-string 80 ?─) 'face 'shadow))
-    (insert "\n\n")
-
     ;; Command field
-    (pchist2-edit--insert-field 'command nil "Command"
+    (pchist2-edit--insert-field 'command nil "Command:   "
                                 (or pchist2-edit--command "(required)"))
-    (insert "\n")
 
     ;; Switches section
-    (pchist2-edit--insert-section-header "Switches")
     (if pchist2-edit--switches
         (cl-loop for switch in pchist2-edit--switches
                  for idx from 0
-                 do (pchist2-edit--insert-field 'switch idx "  " switch))
-      (pchist2-edit--insert-field 'switches-empty nil "  " "(none)"))
-    (insert "\n")
+                 do (pchist2-edit--insert-field 'switch idx
+                                                (if (zerop idx) "Switches:  " "           ")
+                                                switch))
+      (pchist2-edit--insert-field 'switches-empty nil "Switches:  " "(none)"))
 
     ;; Targets section
-    (pchist2-edit--insert-section-header "Targets")
     (if pchist2-edit--targets
         (cl-loop for target in pchist2-edit--targets
                  for idx from 0
-                 do (pchist2-edit--insert-field 'target idx "  " target))
-      (pchist2-edit--insert-field 'targets-empty nil "  " "(none)"))
-    (insert "\n")
+                 do (pchist2-edit--insert-field 'target idx
+                                                (if (zerop idx) "Targets:   " "           ")
+                                                target))
+      (pchist2-edit--insert-field 'targets-empty nil "Targets:   " "(none)"))
 
     ;; Installers section
-    (pchist2-edit--insert-section-header "Installers")
+    (insert (propertize "Installers:" 'face 'default))
+    (insert "\n")
     (if pchist2-edit--installers
         (cl-loop for installer in pchist2-edit--installers
                  for inst-idx from 0
                  do (pchist2-edit--insert-installer installer inst-idx))
       (pchist2-edit--insert-field 'installers-empty nil "  " "(none)"))
+
+    ;; Help section
     (insert "\n")
-
-    ;; Separator
-    (insert (propertize (make-string 80 ?─) 'face 'shadow))
-    (insert "\n\n")
-
-    ;; Instructions
-    (insert (propertize "Keys: " 'face 'bold))
-    (insert "RET/e:edit  a:add  i:add-installer  k:delete  n/p:navigate  C-c C-c:save  C-c C-k:cancel")
+    (if pchist2-edit--help-visible
+        (pchist2-edit--insert-help)
+      (insert (propertize "[?] Show help" 'face 'shadow)))
     (insert "\n")
 
     ;; Restore point or go to first field
     (if (> pos (point-min))
         (goto-char (min pos (point-max)))
       (pchist2-edit--goto-first-field))))
-
-(defun pchist2-edit--insert-section-header (label)
-  "Insert a section header with LABEL."
-  (insert (propertize label 'face 'bold))
-  (insert ":\n"))
 
 (defun pchist2-edit--insert-field (field-type field-index label value)
   "Insert a field line.
@@ -163,9 +157,9 @@ VALUE is the display value."
         (host (alist-get 'host installer))
         (dest (alist-get 'dest_path installer)))
 
-    ;; Installer header
+    ;; Installer header (navigable and deletable)
     (let ((start (point)))
-      (insert (propertize (format "  Installer %d\n" (1+ inst-idx)) 'face 'italic))
+      (insert (format "  Installer %d\n" (1+ inst-idx)))
       (put-text-property start (1- (point)) 'pchist2-field 'installer-header)
       (put-text-property start (1- (point)) 'pchist2-field-index inst-idx))
 
@@ -174,9 +168,15 @@ VALUE is the display value."
                                 "    Command:    " (or cmd "(required)"))
 
     ;; Switches
-    (pchist2-edit--insert-field 'installer-switches inst-idx
-                                "    Switches:   "
-                                (if switches (string-join switches " ") "(none)"))
+    (if switches
+        (cl-loop for switch in switches
+                 for sw-idx from 0
+                 do (pchist2-edit--insert-field 'installer-switch
+                                                (cons inst-idx sw-idx)
+                                                (if (zerop sw-idx) "    Switches:   " "                ")
+                                                switch))
+      (pchist2-edit--insert-field 'installer-switches-empty inst-idx
+                                  "    Switches:   " "(none)"))
 
     ;; Artifacts
     (if artifacts
@@ -184,7 +184,7 @@ VALUE is the display value."
                  for art-idx from 0
                  do (pchist2-edit--insert-field 'installer-artifact
                                                 (cons inst-idx art-idx)
-                                                "    Artifact:   "
+                                                (if (zerop art-idx) "    Artifacts:  " "                ")
                                                 (pchist2-edit--format-artifact artifact)))
       (pchist2-edit--insert-field 'installer-artifacts-empty inst-idx
                                   "    Artifacts:  " "(none)"))
@@ -195,9 +195,7 @@ VALUE is the display value."
 
     ;; Dest path
     (pchist2-edit--insert-field 'installer-dest inst-idx
-                                "    Dest Path:  " (or dest "(none)"))
-
-    (insert "\n")))
+                                "    Dest Path:  " (or dest "(none)"))))
 
 (defun pchist2-edit--format-artifact (artifact)
   "Format ARTIFACT to show basename with full path in parens."
@@ -205,6 +203,27 @@ VALUE is the display value."
     (if (string= basename artifact)
         artifact
       (format "%s (%s)" basename artifact))))
+
+(defun pchist2-edit--insert-help ()
+  "Insert the help section."
+  (insert (propertize "[?] Hide help\n\n" 'face 'shadow))
+  (insert (propertize "Navigation:\n" 'face 'bold))
+  (insert "  n/p, TAB/S-TAB  Move between fields\n")
+  (insert "\n")
+  (insert (propertize "Editing:\n" 'face 'bold))
+  (insert "  RET, e          Edit field at point\n")
+  (insert "  a               Add item (switch/target/installer part)\n")
+  (insert "  k               Delete item at point\n")
+  (insert "\n")
+  (insert (propertize "Save/Cancel:\n" 'face 'bold))
+  (insert "  C-c C-c         Save and exit\n")
+  (insert "  C-c C-k, q      Cancel and exit\n"))
+
+(defun pchist2-edit-toggle-help ()
+  "Toggle help visibility."
+  (interactive)
+  (setq pchist2-edit--help-visible (not pchist2-edit--help-visible))
+  (pchist2-edit--render))
 
 ;;; Navigation
 
@@ -220,14 +239,14 @@ VALUE is the display value."
     (forward-line 1)
     (beginning-of-line)
     (while (and (not (eobp))
-                (not (pchist2-edit--is-editable-field-p (point))))
+                (not (get-text-property (point) 'pchist2-field)))
       (forward-line 1)
       (beginning-of-line))
-    (when (not (pchist2-edit--is-editable-field-p (point)))
+    (when (not (get-text-property (point) 'pchist2-field))
       (goto-char start)
       (goto-char (point-min))
       (while (and (not (eobp))
-                  (not (pchist2-edit--is-editable-field-p (point))))
+                  (not (get-text-property (point) 'pchist2-field)))
         (forward-line 1)
         (beginning-of-line)))))
 
@@ -238,22 +257,16 @@ VALUE is the display value."
     (forward-line -1)
     (beginning-of-line)
     (while (and (not (bobp))
-                (not (pchist2-edit--is-editable-field-p (point))))
+                (not (get-text-property (point) 'pchist2-field)))
       (forward-line -1)
       (beginning-of-line))
-    (when (not (pchist2-edit--is-editable-field-p (point)))
+    (when (not (get-text-property (point) 'pchist2-field))
       (goto-char start)
       (goto-char (point-max))
       (while (and (not (bobp))
-                  (not (pchist2-edit--is-editable-field-p (point))))
+                  (not (get-text-property (point) 'pchist2-field)))
         (forward-line -1)
         (beginning-of-line)))))
-
-(defun pchist2-edit--is-editable-field-p (pos)
-  "Return non-nil if POS is on an editable field."
-  (let ((field (get-text-property pos 'pchist2-field)))
-    (and field
-         (not (memq field '(installer-header))))))
 
 (defun pchist2-edit--get-field-at-point ()
   "Get the field type at point."
@@ -262,6 +275,59 @@ VALUE is the display value."
 (defun pchist2-edit--get-field-index-at-point ()
   "Get the field index at point."
   (get-text-property (point) 'pchist2-field-index))
+
+;;; Context-Aware Actions
+
+(defun pchist2-edit-add-at-point ()
+  "Context-aware add: add switch, target, installer part, or installer."
+  (interactive)
+  (let ((field (pchist2-edit--get-field-at-point)))
+    (pcase field
+      ((or 'switch 'switches-empty)
+       (pchist2-edit--add-switch))
+      ((or 'target 'targets-empty)
+       (pchist2-edit--add-target))
+      ('installer-header
+       (message "Use 'a' on a specific installer field to add to it, or navigate elsewhere"))
+      ((or 'installer-switch 'installer-switches-empty)
+       (pchist2-edit--add-installer-switch))
+      ((or 'installer-artifact 'installer-artifacts-empty)
+       (pchist2-edit--add-installer-artifact))
+      ((or 'installers-empty)
+       (pchist2-edit-add-installer))
+      ('installer-host
+       (message "Host can only be edited, not added (already exists)"))
+      ((or 'command 'installer-command 'installer-dest)
+       (message "Cannot add here - this field can only be edited"))
+      (_
+       (message "Cannot add at this location")))))
+
+(defun pchist2-edit-delete-at-point ()
+  "Context-aware delete: delete switch, target, installer, or installer part."
+  (interactive)
+  (let ((field (pchist2-edit--get-field-at-point))
+        (idx (pchist2-edit--get-field-index-at-point)))
+    (pcase field
+      ('switch (pchist2-edit--delete-switch idx))
+      ('target (pchist2-edit--delete-target idx))
+      ('installer-header (pchist2-edit--delete-installer idx))
+      ('installer-switch (pchist2-edit--delete-installer-switch idx))
+      ('installer-artifact (pchist2-edit--delete-installer-artifact idx))
+      ((or 'command 'installer-command)
+       (message "Cannot delete command field - edit it instead"))
+      ('installer-host
+       (let ((installer (nth idx pchist2-edit--installers)))
+         (if (alist-get 'host installer)
+             (progn
+               (setf (alist-get 'host installer) nil)
+               (pchist2-edit--render)
+               (message "Host cleared"))
+           (message "Host is already empty"))))
+      ((or 'installer-dest 'switches-empty 'targets-empty
+           'installer-switches-empty 'installer-artifacts-empty 'installers-empty)
+       (message "Nothing to delete here"))
+      (_
+       (message "Cannot delete at this location")))))
 
 ;;; Field Editing
 
@@ -278,35 +344,14 @@ VALUE is the display value."
       ('target (pchist2-edit--modify-target))
       ('targets-empty (pchist2-edit--add-target))
       ('installers-empty (pchist2-edit-add-installer))
+      ('installer-header (message "Use 'k' to delete this installer, or navigate to a field to edit it"))
       ('installer-command (pchist2-edit--modify-installer-command))
-      ('installer-switches (pchist2-edit--modify-installer-switches))
+      ('installer-switch (pchist2-edit--modify-installer-switch))
+      ('installer-switches-empty (pchist2-edit--add-installer-switch))
       ('installer-artifact (pchist2-edit--modify-installer-artifact))
       ('installer-artifacts-empty (pchist2-edit--add-installer-artifact))
       ('installer-host (pchist2-edit--modify-installer-host))
       ('installer-dest (pchist2-edit--modify-installer-dest)))))
-
-(defun pchist2-edit-add-at-point ()
-  "Add a new item at the current section."
-  (interactive)
-  (let ((field (pchist2-edit--get-field-at-point)))
-    (pcase field
-      ((or 'switch 'switches-empty) (pchist2-edit--add-switch))
-      ((or 'target 'targets-empty) (pchist2-edit--add-target))
-      (_ (user-error "Cannot add here. Use 'i' to add an installer")))))
-
-(defun pchist2-edit-delete-at-point ()
-  "Delete the item at point."
-  (interactive)
-  (let ((field (pchist2-edit--get-field-at-point))
-        (idx (pchist2-edit--get-field-index-at-point)))
-    (pcase field
-      ('switch (pchist2-edit--delete-switch idx))
-      ('target (pchist2-edit--delete-target idx))
-      ((or 'installer-header 'installer-command 'installer-switches
-           'installer-artifact 'installer-artifacts-empty
-           'installer-host 'installer-dest)
-       (pchist2-edit--delete-installer (if (consp idx) (car idx) idx)))
-      (_ (user-error "Cannot delete this field")))))
 
 ;;; Command Field
 
@@ -433,22 +478,48 @@ VALUE is the display value."
       (setf (alist-get 'command installer) (string-trim new-val))
       (pchist2-edit--render))))
 
-(defun pchist2-edit--modify-installer-switches ()
-  "Modify installer switches field."
-  (let* ((idx (pchist2-edit--get-field-index-at-point))
+(defun pchist2-edit--add-installer-switch ()
+  "Add a switch to the current installer."
+  (let* ((idx (if (consp (pchist2-edit--get-field-index-at-point))
+                  (car (pchist2-edit--get-field-index-at-point))
+                (pchist2-edit--get-field-index-at-point)))
          (installer (nth idx pchist2-edit--installers))
-         (current (alist-get 'switches installer))
-         (current-str (if current (string-join current " ") ""))
-         (new-val (read-string "Installer switches (space-separated): " current-str)))
+         (new-val (read-string "Installer switch: ")))
+    (when (and new-val (not (string-empty-p new-val)))
+      (let ((switches (alist-get 'switches installer)))
+        (setf (alist-get 'switches installer)
+              (append switches (list (string-trim new-val))))
+        (pchist2-edit--render)))))
+
+(defun pchist2-edit--modify-installer-switch ()
+  "Modify an installer switch."
+  (let* ((indices (pchist2-edit--get-field-index-at-point))
+         (inst-idx (car indices))
+         (sw-idx (cdr indices))
+         (installer (nth inst-idx pchist2-edit--installers))
+         (switches (alist-get 'switches installer))
+         (current (nth sw-idx switches))
+         (new-val (read-string "Installer switch: " current)))
+    (when (and new-val (not (string-empty-p new-val)))
+      (setf (nth sw-idx switches) (string-trim new-val))
+      (pchist2-edit--render))))
+
+(defun pchist2-edit--delete-installer-switch (indices)
+  "Delete installer switch at INDICES (cons of inst-idx . sw-idx)."
+  (let* ((inst-idx (car indices))
+         (sw-idx (cdr indices))
+         (installer (nth inst-idx pchist2-edit--installers))
+         (switches (alist-get 'switches installer)))
     (setf (alist-get 'switches installer)
-          (if (string-empty-p new-val)
-              nil
-            (split-string new-val " " t)))
+          (append (cl-subseq switches 0 sw-idx)
+                  (cl-subseq switches (1+ sw-idx))))
     (pchist2-edit--render)))
 
 (defun pchist2-edit--add-installer-artifact ()
   "Add an artifact to the current installer."
-  (let* ((idx (pchist2-edit--get-field-index-at-point))
+  (let* ((idx (if (consp (pchist2-edit--get-field-index-at-point))
+                  (car (pchist2-edit--get-field-index-at-point))
+                (pchist2-edit--get-field-index-at-point)))
          (installer (nth idx pchist2-edit--installers))
          (new-val (read-file-name "Artifact path: " pchist2-edit--project)))
     (when (and new-val (not (string-empty-p new-val)))
@@ -469,6 +540,17 @@ VALUE is the display value."
     (when (and new-val (not (string-empty-p new-val)))
       (setf (nth art-idx artifacts) new-val)
       (pchist2-edit--render))))
+
+(defun pchist2-edit--delete-installer-artifact (indices)
+  "Delete installer artifact at INDICES (cons of inst-idx . art-idx)."
+  (let* ((inst-idx (car indices))
+         (art-idx (cdr indices))
+         (installer (nth inst-idx pchist2-edit--installers))
+         (artifacts (alist-get 'artifacts installer)))
+    (setf (alist-get 'artifacts installer)
+          (append (cl-subseq artifacts 0 art-idx)
+                  (cl-subseq artifacts (1+ art-idx))))
+    (pchist2-edit--render)))
 
 (defun pchist2-edit--modify-installer-host ()
   "Modify installer host field."
@@ -548,6 +630,7 @@ If CMD is nil and PROJECT-ROOT is provided, create a new command."
       ;; Initialize state
       (setq pchist2-edit--original-cmd (if duplicate nil cmd))
       (setq pchist2-edit--is-duplicate duplicate)
+      (setq pchist2-edit--help-visible nil)
 
       (if cmd
           (progn
