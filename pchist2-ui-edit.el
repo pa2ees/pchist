@@ -45,6 +45,9 @@
 (defvar-local pchist2-edit--help-visible nil
   "Non-nil if help section is visible.")
 
+(defvar-local pchist2-edit--initial-state nil
+  "Initial state snapshot for change detection.")
+
 ;;; Mode Definition
 
 (defvar pchist2-edit-mode-map
@@ -69,7 +72,9 @@
 
 \\{pchist2-edit-mode-map}"
   (setq buffer-read-only t)
-  (setq truncate-lines nil))
+  (setq truncate-lines nil)
+  (when (fboundp 'display-line-numbers-mode)
+    (display-line-numbers-mode -1)))
 
 ;;; Buffer Rendering
 
@@ -610,12 +615,30 @@ VALUE is the display value."
                             pchist2-edit--installers)
         (message "Command saved"))))
 
-  (quit-window t))
+  (quit-window t)
+
+  ;; Refresh select screen if it exists
+  (let ((select-buffer (get-buffer "*pchist2-commands*")))
+    (when select-buffer
+      (with-current-buffer select-buffer
+        (when (fboundp 'pchist2-select-refresh)
+          (pchist2-select-refresh))))))
 
 (defun pchist2-edit-cancel ()
-  "Cancel editing and exit without confirmation."
+  "Cancel editing and exit, confirming if changes were made."
   (interactive)
-  (quit-window t))
+  (if (pchist2-edit--has-changes)
+      (when (yes-or-no-p "Discard changes? ")
+        (quit-window t))
+    (quit-window t)))
+
+(defun pchist2-edit--has-changes ()
+  "Return non-nil if the command has been modified."
+  (let ((current-state (list pchist2-edit--command
+                            pchist2-edit--switches
+                            pchist2-edit--targets
+                            pchist2-edit--installers)))
+    (not (equal current-state pchist2-edit--initial-state))))
 
 ;;; Entry Point
 
@@ -645,6 +668,12 @@ If CMD is nil and PROJECT-ROOT is provided, create a new command."
         (setq pchist2-edit--switches nil)
         (setq pchist2-edit--targets nil)
         (setq pchist2-edit--installers nil))
+
+      ;; Capture initial state for change detection
+      (setq pchist2-edit--initial-state (list pchist2-edit--command
+                                              pchist2-edit--switches
+                                              pchist2-edit--targets
+                                              pchist2-edit--installers))
 
       (pchist2-edit--render))
 

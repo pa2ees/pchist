@@ -57,6 +57,9 @@
     (define-key map (kbd "p") #'pchist2-select-previous-command)
     (define-key map (kbd "<down>") #'pchist2-select-next-command)
     (define-key map (kbd "<up>") #'pchist2-select-previous-command)
+    ;; Quick jump by number
+    (dotimes (i 10)
+      (define-key map (kbd (number-to-string i)) #'pchist2-select-jump-to-number))
     ;; Refresh
     (define-key map (kbd "g") #'pchist2-select-refresh)
     ;; Quit
@@ -69,7 +72,9 @@
 
 \\{pchist2-select-mode-map}"
   (setq buffer-read-only t)
-  (setq truncate-lines nil))
+  (setq truncate-lines nil)
+  (when (fboundp 'display-line-numbers-mode)
+    (display-line-numbers-mode -1)))
 
 ;;; Data Retrieval
 
@@ -106,21 +111,30 @@
 
 (defun pchist2-select--format-command (cmd)
   "Format CMD for display in select list."
-  (let* ((command (alist-get 'command cmd))
-         (switches (alist-get 'switches cmd))
-         (targets (alist-get 'targets cmd))
-         (installers (alist-get 'installers cmd))
-         (show-project (pchist2-select--has-multiple-projects))
-         (parts (list command)))
+  (let* ((show-project (pchist2-select--has-multiple-projects))
+         (cmd-str (pchist2-select--format-command-full cmd))
+         (parts nil))
 
-    ;; Add project if multiple projects
+    ;; Add project prefix if multiple projects
     (when show-project
       (let* ((project (alist-get 'project cmd))
              (proj-display (if pchist2-select--show-full-paths
                                project
                              (file-name-nondirectory (directory-file-name project)))))
-        (setq parts (cons (propertize (format "[%s]" proj-display) 'face 'shadow)
-                         parts))))
+        (push (propertize (format "[%s]" proj-display) 'face 'shadow) parts)))
+
+    ;; Add the full command
+    (push cmd-str parts)
+
+    (string-join parts " ")))
+
+(defun pchist2-select--format-command-full (cmd)
+  "Format CMD as a full command string respecting path display setting."
+  (let* ((command (alist-get 'command cmd))
+         (switches (alist-get 'switches cmd))
+         (targets (alist-get 'targets cmd))
+         (installers (alist-get 'installers cmd))
+         (parts (list command)))
 
     ;; Add switches
     (when switches
@@ -130,19 +144,29 @@
     (when targets
       (setq parts (append parts targets)))
 
-    ;; Add installer info (abbreviated)
+    ;; Add installer info
     (when installers
-      (let ((artifacts (apply #'append
-                            (mapcar (lambda (inst) (alist-get 'artifacts inst))
-                                   installers))))
-        (when artifacts
-          (let ((art-display (if pchist2-select--show-full-paths
-                                (string-join artifacts ", ")
-                              (string-join (mapcar #'file-name-nondirectory artifacts) ", "))))
-            (setq parts (append parts
-                              (list (propertize
-                                    (format "→ %s" art-display)
-                                    'face 'italic))))))))
+      (dolist (inst installers)
+        (let* ((inst-cmd (alist-get 'command inst))
+               (artifacts (alist-get 'artifacts inst))
+               (host (alist-get 'host inst))
+               (dest (alist-get 'dest_path inst))
+               (inst-parts (list inst-cmd)))
+          ;; Add artifacts
+          (when artifacts
+            (let ((art-display (if pchist2-select--show-full-paths
+                                   artifacts
+                                 (mapcar #'file-name-nondirectory artifacts))))
+              (setq inst-parts (append inst-parts art-display))))
+          ;; Add destination
+          (when (or host dest)
+            (setq inst-parts (append inst-parts
+                                     (list (format "%s%s"
+                                                   (if host (concat host ":") "")
+                                                   (or dest ""))))))
+          ;; Build full installer string
+          (setq parts (append parts
+                              (list (concat "&& " (string-join inst-parts " "))))))))
 
     (string-join parts " ")))
 
@@ -162,12 +186,14 @@
 
     ;; Command list
     (if commands
-        (dolist (cmd commands)
-          (let ((start (point)))
-            (insert "  ")
-            (insert (pchist2-select--format-command cmd))
-            (insert "\n")
-            (put-text-property start (point) 'pchist2-command cmd)))
+        (let ((num 1))
+          (dolist (cmd commands)
+            (let ((start (point)))
+              (insert (propertize (format "%2d. " num) 'face 'bold))
+              (insert (pchist2-select--format-command cmd))
+              (insert "\n")
+              (put-text-property start (point) 'pchist2-command cmd)
+              (setq num (1+ num)))))
       (insert "  (no commands)\n"))
 
     (insert "\n")
@@ -227,6 +253,7 @@
   (insert "\n")
   (insert (propertize "Navigation:\n" 'face 'bold))
   (insert "  n/p, ↓/↑    Next/previous command\n")
+  (insert "  1-9, 0      Jump to command #1-10\n")
   (insert "\n")
   (insert (propertize "Other:\n" 'face 'bold))
   (insert "  ?           Toggle help\n")
@@ -269,6 +296,26 @@
                 (not (bobp)))
       (forward-line -1))))
 
+(defun pchist2-select-jump-to-number ()
+  "Jump to command by number (press digit key)."
+  (interactive)
+  (let* ((key (this-command-keys))
+         (digit-char (aref key 0))
+         (digit (- digit-char ?0))
+         (target-num (if (zerop digit) 10 digit)))
+    (goto-char (point-min))
+    (let ((found nil)
+          (current-num 1))
+      (while (and (not found) (not (eobp)))
+        (when (pchist2-select--get-command-at-point)
+          (if (= current-num target-num)
+              (setq found t)
+            (setq current-num (1+ current-num))))
+        (unless found (forward-line 1)))
+      (unless found
+        (message "No command #%d" target-num)
+        (pchist2-select--goto-first-command)))))
+
 ;;; Toggle Commands
 
 (defun pchist2-select-toggle-help ()
@@ -303,8 +350,7 @@
     (if cmd
         (progn
           (require 'pchist2-ui-edit)
-          (pchist2-edit-command cmd)
-          (pchist2-select-refresh))
+          (pchist2-edit-command cmd))
       (user-error "No command at point"))))
 
 (defun pchist2-select-create ()
@@ -313,8 +359,7 @@
   (require 'pchist2-ui-edit)
   (let ((project-root (or (projectile-project-root)
                           (read-directory-name "Project root: "))))
-    (pchist2-edit-command nil nil project-root)
-    (pchist2-select-refresh)))
+    (pchist2-edit-command nil nil project-root)))
 
 (defun pchist2-select-duplicate ()
   "Duplicate the command at point."
@@ -323,8 +368,7 @@
     (if cmd
         (progn
           (require 'pchist2-ui-edit)
-          (pchist2-edit-command cmd t)
-          (pchist2-select-refresh))
+          (pchist2-edit-command cmd t))
       (user-error "No command at point"))))
 
 (defun pchist2-select-duplicate-to-project ()
