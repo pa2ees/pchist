@@ -35,14 +35,15 @@
 ;;   q       - Quit
 ;;
 ;; Key bindings in edit screen:
-;;   RET/e   - Edit field at point
-;;   a       - Add switch/target
-;;   i       - Add installer
-;;   k       - Delete item at point
-;;   n/p     - Navigate between fields
-;;   g       - Refresh display
-;;   C-c C-c - Save changes
-;;   C-c C-k - Cancel
+;;   RET/e         - Edit field at point
+;;   a             - Add switch/target
+;;   i             - Add installer
+;;   k             - Delete item at point
+;;   n/p           - Navigate between fields
+;;   M-p/n, M-↑/↓  - Move item up/down
+;;   g             - Refresh display
+;;   C-c C-c       - Save changes
+;;   C-c C-k       - Cancel
 
 ;;; Code:
 

@@ -60,6 +60,10 @@
     (define-key map (kbd "p") #'pchist2-edit-previous-field)
     (define-key map (kbd "TAB") #'pchist2-edit-next-field)
     (define-key map (kbd "<backtab>") #'pchist2-edit-previous-field)
+    (define-key map (kbd "M-p") #'pchist2-edit-move-up)
+    (define-key map (kbd "M-n") #'pchist2-edit-move-down)
+    (define-key map (kbd "M-<up>") #'pchist2-edit-move-up)
+    (define-key map (kbd "M-<down>") #'pchist2-edit-move-down)
     (define-key map (kbd "?") #'pchist2-edit-toggle-help)
     (define-key map (kbd "g") #'pchist2-edit--render)
     (define-key map (kbd "C-c C-c") #'pchist2-edit-save)
@@ -221,6 +225,7 @@ VALUE is the display value."
   (insert "  RET, e          Edit field at point\n")
   (insert "  a               Add item (switch/target/installer part)\n")
   (insert "  k               Delete item at point\n")
+  (insert "  M-p/n, M-↑/↓    Move item up/down\n")
   (insert "\n")
   (insert (propertize "Save/Cancel:\n" 'face 'bold))
   (insert "  C-c C-c         Save and exit\n")
@@ -283,6 +288,51 @@ VALUE is the display value."
   "Get the field index at point."
   (get-text-property (point) 'pchist2-field-index))
 
+(defun pchist2-edit--goto-switch (idx)
+  "Move point to switch at IDX."
+  (goto-char (point-min))
+  (while (and (not (eobp))
+              (not (and (eq (pchist2-edit--get-field-at-point) 'switch)
+                        (equal (pchist2-edit--get-field-index-at-point) idx))))
+    (forward-line 1))
+  (beginning-of-line))
+
+(defun pchist2-edit--goto-target (idx)
+  "Move point to target at IDX."
+  (goto-char (point-min))
+  (while (and (not (eobp))
+              (not (and (eq (pchist2-edit--get-field-at-point) 'target)
+                        (equal (pchist2-edit--get-field-index-at-point) idx))))
+    (forward-line 1))
+  (beginning-of-line))
+
+(defun pchist2-edit--goto-installer (idx)
+  "Move point to installer header at IDX."
+  (goto-char (point-min))
+  (while (and (not (eobp))
+              (not (and (eq (pchist2-edit--get-field-at-point) 'installer-header)
+                        (equal (pchist2-edit--get-field-index-at-point) idx))))
+    (forward-line 1))
+  (beginning-of-line))
+
+(defun pchist2-edit--goto-installer-switch (inst-idx sw-idx)
+  "Move point to installer switch at INST-IDX, SW-IDX."
+  (goto-char (point-min))
+  (while (and (not (eobp))
+              (not (and (eq (pchist2-edit--get-field-at-point) 'installer-switch)
+                        (equal (pchist2-edit--get-field-index-at-point) (cons inst-idx sw-idx)))))
+    (forward-line 1))
+  (beginning-of-line))
+
+(defun pchist2-edit--goto-installer-artifact (inst-idx art-idx)
+  "Move point to installer artifact at INST-IDX, ART-IDX."
+  (goto-char (point-min))
+  (while (and (not (eobp))
+              (not (and (eq (pchist2-edit--get-field-at-point) 'installer-artifact)
+                        (equal (pchist2-edit--get-field-index-at-point) (cons inst-idx art-idx)))))
+    (forward-line 1))
+  (beginning-of-line))
+
 ;;; Context-Aware Actions
 
 (defun pchist2-edit-add-at-point ()
@@ -335,6 +385,32 @@ VALUE is the display value."
        (message "Nothing to delete here"))
       (_
        (message "Cannot delete at this location")))))
+
+(defun pchist2-edit-move-up ()
+  "Move the item at point up within its list."
+  (interactive)
+  (let ((field (pchist2-edit--get-field-at-point))
+        (idx (pchist2-edit--get-field-index-at-point)))
+    (pcase field
+      ('switch (pchist2-edit--move-switch-up idx))
+      ('target (pchist2-edit--move-target-up idx))
+      ('installer-header (pchist2-edit--move-installer-up idx))
+      ('installer-switch (pchist2-edit--move-installer-switch-up idx))
+      ('installer-artifact (pchist2-edit--move-installer-artifact-up idx))
+      (_ (message "Cannot move this item")))))
+
+(defun pchist2-edit-move-down ()
+  "Move the item at point down within its list."
+  (interactive)
+  (let ((field (pchist2-edit--get-field-at-point))
+        (idx (pchist2-edit--get-field-index-at-point)))
+    (pcase field
+      ('switch (pchist2-edit--move-switch-down idx))
+      ('target (pchist2-edit--move-target-down idx))
+      ('installer-header (pchist2-edit--move-installer-down idx))
+      ('installer-switch (pchist2-edit--move-installer-switch-down idx))
+      ('installer-artifact (pchist2-edit--move-installer-artifact-down idx))
+      (_ (message "Cannot move this item")))))
 
 ;;; Field Editing
 
@@ -407,6 +483,34 @@ VALUE is the display value."
                 (cl-subseq pchist2-edit--switches (1+ idx))))
   (pchist2-edit--render))
 
+(defun pchist2-edit--move-switch-up (idx)
+  "Move switch at IDX up one position."
+  (if (zerop idx)
+      (message "Already at top of switches")
+    (let ((item (nth idx pchist2-edit--switches)))
+      (setq pchist2-edit--switches
+            (append (cl-subseq pchist2-edit--switches 0 (1- idx))
+                    (list item)
+                    (list (nth (1- idx) pchist2-edit--switches))
+                    (cl-subseq pchist2-edit--switches (1+ idx))))
+      (pchist2-edit--render)
+      ;; Move point to the moved item's new position
+      (pchist2-edit--goto-switch (1- idx)))))
+
+(defun pchist2-edit--move-switch-down (idx)
+  "Move switch at IDX down one position."
+  (if (>= idx (1- (length pchist2-edit--switches)))
+      (message "Already at bottom of switches")
+    (let ((item (nth idx pchist2-edit--switches)))
+      (setq pchist2-edit--switches
+            (append (cl-subseq pchist2-edit--switches 0 idx)
+                    (list (nth (1+ idx) pchist2-edit--switches))
+                    (list item)
+                    (cl-subseq pchist2-edit--switches (+ idx 2))))
+      (pchist2-edit--render)
+      ;; Move point to the moved item's new position
+      (pchist2-edit--goto-switch (1+ idx)))))
+
 ;;; Target Fields
 
 (defun pchist2-edit--add-target ()
@@ -441,6 +545,34 @@ VALUE is the display value."
                 (cl-subseq pchist2-edit--targets (1+ idx))))
   (pchist2-edit--render))
 
+(defun pchist2-edit--move-target-up (idx)
+  "Move target at IDX up one position."
+  (if (zerop idx)
+      (message "Already at top of targets")
+    (let ((item (nth idx pchist2-edit--targets)))
+      (setq pchist2-edit--targets
+            (append (cl-subseq pchist2-edit--targets 0 (1- idx))
+                    (list item)
+                    (list (nth (1- idx) pchist2-edit--targets))
+                    (cl-subseq pchist2-edit--targets (1+ idx))))
+      (pchist2-edit--render)
+      ;; Move point to the moved item's new position
+      (pchist2-edit--goto-target (1- idx)))))
+
+(defun pchist2-edit--move-target-down (idx)
+  "Move target at IDX down one position."
+  (if (>= idx (1- (length pchist2-edit--targets)))
+      (message "Already at bottom of targets")
+    (let ((item (nth idx pchist2-edit--targets)))
+      (setq pchist2-edit--targets
+            (append (cl-subseq pchist2-edit--targets 0 idx)
+                    (list (nth (1+ idx) pchist2-edit--targets))
+                    (list item)
+                    (cl-subseq pchist2-edit--targets (+ idx 2))))
+      (pchist2-edit--render)
+      ;; Move point to the moved item's new position
+      (pchist2-edit--goto-target (1+ idx)))))
+
 ;;; Installer Management
 
 (defun pchist2-edit-add-installer ()
@@ -468,6 +600,34 @@ VALUE is the display value."
           (append (cl-subseq pchist2-edit--installers 0 idx)
                   (cl-subseq pchist2-edit--installers (1+ idx))))
     (pchist2-edit--render)))
+
+(defun pchist2-edit--move-installer-up (idx)
+  "Move installer at IDX up one position."
+  (if (zerop idx)
+      (message "Already at top of installers")
+    (let ((item (nth idx pchist2-edit--installers)))
+      (setq pchist2-edit--installers
+            (append (cl-subseq pchist2-edit--installers 0 (1- idx))
+                    (list item)
+                    (list (nth (1- idx) pchist2-edit--installers))
+                    (cl-subseq pchist2-edit--installers (1+ idx))))
+      (pchist2-edit--render)
+      ;; Move point to the moved installer's new position
+      (pchist2-edit--goto-installer (1- idx)))))
+
+(defun pchist2-edit--move-installer-down (idx)
+  "Move installer at IDX down one position."
+  (if (>= idx (1- (length pchist2-edit--installers)))
+      (message "Already at bottom of installers")
+    (let ((item (nth idx pchist2-edit--installers)))
+      (setq pchist2-edit--installers
+            (append (cl-subseq pchist2-edit--installers 0 idx)
+                    (list (nth (1+ idx) pchist2-edit--installers))
+                    (list item)
+                    (cl-subseq pchist2-edit--installers (+ idx 2))))
+      (pchist2-edit--render)
+      ;; Move point to the moved installer's new position
+      (pchist2-edit--goto-installer (1+ idx)))))
 
 ;;; Installer Field Editing
 
@@ -522,6 +682,40 @@ VALUE is the display value."
                   (cl-subseq switches (1+ sw-idx))))
     (pchist2-edit--render)))
 
+(defun pchist2-edit--move-installer-switch-up (indices)
+  "Move installer switch at INDICES up one position."
+  (let* ((inst-idx (car indices))
+         (sw-idx (cdr indices))
+         (installer (nth inst-idx pchist2-edit--installers))
+         (switches (alist-get 'switches installer)))
+    (if (zerop sw-idx)
+        (message "Already at top of installer switches")
+      (let ((item (nth sw-idx switches)))
+        (setf (alist-get 'switches installer)
+              (append (cl-subseq switches 0 (1- sw-idx))
+                      (list item)
+                      (list (nth (1- sw-idx) switches))
+                      (cl-subseq switches (1+ sw-idx))))
+        (pchist2-edit--render)
+        (pchist2-edit--goto-installer-switch inst-idx (1- sw-idx))))))
+
+(defun pchist2-edit--move-installer-switch-down (indices)
+  "Move installer switch at INDICES down one position."
+  (let* ((inst-idx (car indices))
+         (sw-idx (cdr indices))
+         (installer (nth inst-idx pchist2-edit--installers))
+         (switches (alist-get 'switches installer)))
+    (if (>= sw-idx (1- (length switches)))
+        (message "Already at bottom of installer switches")
+      (let ((item (nth sw-idx switches)))
+        (setf (alist-get 'switches installer)
+              (append (cl-subseq switches 0 sw-idx)
+                      (list (nth (1+ sw-idx) switches))
+                      (list item)
+                      (cl-subseq switches (+ sw-idx 2))))
+        (pchist2-edit--render)
+        (pchist2-edit--goto-installer-switch inst-idx (1+ sw-idx))))))
+
 (defun pchist2-edit--add-installer-artifact ()
   "Add an artifact to the current installer."
   (let* ((idx (if (consp (pchist2-edit--get-field-index-at-point))
@@ -558,6 +752,40 @@ VALUE is the display value."
           (append (cl-subseq artifacts 0 art-idx)
                   (cl-subseq artifacts (1+ art-idx))))
     (pchist2-edit--render)))
+
+(defun pchist2-edit--move-installer-artifact-up (indices)
+  "Move installer artifact at INDICES up one position."
+  (let* ((inst-idx (car indices))
+         (art-idx (cdr indices))
+         (installer (nth inst-idx pchist2-edit--installers))
+         (artifacts (alist-get 'artifacts installer)))
+    (if (zerop art-idx)
+        (message "Already at top of installer artifacts")
+      (let ((item (nth art-idx artifacts)))
+        (setf (alist-get 'artifacts installer)
+              (append (cl-subseq artifacts 0 (1- art-idx))
+                      (list item)
+                      (list (nth (1- art-idx) artifacts))
+                      (cl-subseq artifacts (1+ art-idx))))
+        (pchist2-edit--render)
+        (pchist2-edit--goto-installer-artifact inst-idx (1- art-idx))))))
+
+(defun pchist2-edit--move-installer-artifact-down (indices)
+  "Move installer artifact at INDICES down one position."
+  (let* ((inst-idx (car indices))
+         (art-idx (cdr indices))
+         (installer (nth inst-idx pchist2-edit--installers))
+         (artifacts (alist-get 'artifacts installer)))
+    (if (>= art-idx (1- (length artifacts)))
+        (message "Already at bottom of installer artifacts")
+      (let ((item (nth art-idx artifacts)))
+        (setf (alist-get 'artifacts installer)
+              (append (cl-subseq artifacts 0 art-idx)
+                      (list (nth (1+ art-idx) artifacts))
+                      (list item)
+                      (cl-subseq artifacts (+ art-idx 2))))
+        (pchist2-edit--render)
+        (pchist2-edit--goto-installer-artifact inst-idx (1+ art-idx))))))
 
 (defun pchist2-edit--modify-installer-host ()
   "Modify installer host field."
