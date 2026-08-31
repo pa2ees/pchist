@@ -186,10 +186,14 @@ Within each project group, commands are sorted by current sort mode."
     (when installers
       (dolist (inst installers)
         (let* ((inst-cmd (alist-get 'command inst))
+               (inst-switches (alist-get 'switches inst))
                (artifacts (alist-get 'artifacts inst))
                (host (alist-get 'host inst))
                (dest (alist-get 'dest_path inst))
                (inst-parts (list inst-cmd)))
+          ;; Add installer switches
+          (when inst-switches
+            (setq inst-parts (append inst-parts inst-switches)))
           ;; Add artifacts
           (when artifacts
             (let ((art-display (if pchist2-select--show-full-paths

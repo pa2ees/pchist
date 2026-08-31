@@ -223,7 +223,7 @@ VALUE is the display value."
   (insert "\n")
   (insert (propertize "Editing:\n" 'face 'bold))
   (insert "  RET, e          Edit field at point\n")
-  (insert "  a               Add item (switch/target/installer part)\n")
+  (insert "  a               Add item (context-aware)\n")
   (insert "  k               Delete item at point\n")
   (insert "  M-p/n, M-↑/↓    Move item up/down\n")
   (insert "\n")
@@ -345,7 +345,7 @@ VALUE is the display value."
       ((or 'target 'targets-empty)
        (pchist2-edit--add-target))
       ('installer-header
-       (message "Use 'a' on a specific installer field to add to it, or navigate elsewhere"))
+       (pchist2-edit-add-installer))
       ((or 'installer-switch 'installer-switches-empty)
        (pchist2-edit--add-installer-switch))
       ((or 'installer-artifact 'installer-artifacts-empty)

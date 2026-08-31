@@ -36,8 +36,7 @@
 ;;
 ;; Key bindings in edit screen:
 ;;   RET/e         - Edit field at point
-;;   a             - Add switch/target
-;;   i             - Add installer
+;;   a             - Add item (context-aware)
 ;;   k             - Delete item at point
 ;;   n/p           - Navigate between fields
 ;;   M-p/n, M-↑/↓  - Move item up/down
