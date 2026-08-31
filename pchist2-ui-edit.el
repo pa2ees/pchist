@@ -615,22 +615,34 @@ VALUE is the display value."
                             pchist2-edit--installers)
         (message "Command saved"))))
 
-  (quit-window t)
-
-  ;; Refresh select screen if it exists
+  ;; Refresh and return to select screen
   (let ((select-buffer (get-buffer "*pchist2-commands*")))
-    (when select-buffer
-      (with-current-buffer select-buffer
-        (when (fboundp 'pchist2-select-refresh)
-          (pchist2-select-refresh))))))
+    (if select-buffer
+        (progn
+          (quit-window t)
+          (switch-to-buffer select-buffer)
+          (when (fboundp 'pchist2-select-refresh)
+            (pchist2-select-refresh)))
+      ;; No select buffer, just quit
+      (quit-window t))))
 
 (defun pchist2-edit-cancel ()
   "Cancel editing and exit, confirming if changes were made."
   (interactive)
   (if (pchist2-edit--has-changes)
       (when (yes-or-no-p "Discard changes? ")
-        (quit-window t))
-    (quit-window t)))
+        (pchist2-edit--return-to-select))
+    (pchist2-edit--return-to-select)))
+
+(defun pchist2-edit--return-to-select ()
+  "Return to select screen in same window."
+  (let ((select-buffer (get-buffer "*pchist2-commands*")))
+    (if select-buffer
+        (progn
+          (quit-window t)
+          (switch-to-buffer select-buffer))
+      ;; No select buffer, just quit
+      (quit-window t))))
 
 (defun pchist2-edit--has-changes ()
   "Return non-nil if the command has been modified."
@@ -677,6 +689,7 @@ If CMD is nil and PROJECT-ROOT is provided, create a new command."
 
       (pchist2-edit--render))
 
+    ;; Switch in same window (don't create new splits)
     (switch-to-buffer buffer)))
 
 (provide 'pchist2-ui-edit)

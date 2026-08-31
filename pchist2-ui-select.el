@@ -36,6 +36,9 @@
 (defvar-local pchist2-select--commands nil
   "List of commands currently displayed.")
 
+(defvar pchist2--saved-window-config nil
+  "Saved window configuration to restore on quit.")
+
 ;;; Mode Definition
 
 (defvar pchist2-select-mode-map
@@ -63,7 +66,7 @@
     ;; Refresh
     (define-key map (kbd "g") #'pchist2-select-refresh)
     ;; Quit
-    (define-key map (kbd "q") #'quit-window)
+    (define-key map (kbd "q") #'pchist2-select-quit)
     map)
   "Keymap for `pchist2-select-mode'.")
 
@@ -339,7 +342,7 @@
     (if cmd
         (let ((command-string (pchist2-format-command-for-execution cmd))
               (default-directory (alist-get 'project cmd)))
-          (quit-window)
+          (pchist2--restore-windows)
           (projectile-run-compilation command-string))
       (user-error "No command at point"))))
 
@@ -436,7 +439,32 @@
   (pchist2-load)
   (pchist2-select--refresh))
 
+(defun pchist2-select-quit ()
+  "Quit pchist2 and restore window configuration."
+  (interactive)
+  (quit-window t)
+  (pchist2--restore-windows))
+
 ;;; Entry Point
+
+;;; Window Management
+
+(defun pchist2--save-and-setup-windows (buffer)
+  "Save window config and setup split for pchist2 BUFFER."
+  ;; Save current window configuration
+  (setq pchist2--saved-window-config (current-window-configuration))
+
+  ;; Take over: single window split top/bottom
+  (delete-other-windows)
+  (split-window-below)
+  (other-window 1)
+  (switch-to-buffer buffer))
+
+(defun pchist2--restore-windows ()
+  "Restore saved window configuration."
+  (when pchist2--saved-window-config
+    (set-window-configuration pchist2--saved-window-config)
+    (setq pchist2--saved-window-config nil)))
 
 ;;;###autoload
 (defun pchist2-ui-select-command ()
@@ -474,7 +502,7 @@ Key bindings:
 
     ;; Check if we have any commands
     (if has-commands
-        (switch-to-buffer buffer)
+        (pchist2--save-and-setup-windows buffer)
       (progn
         (message "No commands in history. Create one now.")
         (require 'pchist2-ui-edit)
