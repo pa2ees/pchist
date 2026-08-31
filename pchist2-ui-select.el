@@ -30,6 +30,9 @@
 (defvar-local pchist2-select--show-full-paths nil
   "Non-nil to show full paths instead of basenames.")
 
+(defvar-local pchist2-select--sort-mode 'last-used
+  "Current sort mode: `last-used' or `alphabetically'.")
+
 (defvar-local pchist2-select--help-visible nil
   "Non-nil if help section is visible.")
 
@@ -54,6 +57,7 @@
     ;; Filter/View
     (define-key map (kbd "f") #'pchist2-select-cycle-filter)
     (define-key map (kbd "F") #'pchist2-select-toggle-full-paths)
+    (define-key map (kbd "s") #'pchist2-select-cycle-sort)
     (define-key map (kbd "?") #'pchist2-select-toggle-help)
     ;; Navigation
     (define-key map (kbd "n") #'pchist2-select-next-command)
@@ -82,7 +86,8 @@
 ;;; Data Retrieval
 
 (defun pchist2-select--get-filtered-commands ()
-  "Get commands based on current filter settings."
+  "Get commands based on current filter settings.
+Returns unsorted commands - sorting/grouping is done in refresh."
   (pcase pchist2-select--filter
     ('current-project
      (let ((project-root (projectile-project-root)))
@@ -110,15 +115,45 @@
                 :test #'string=))
        1)))
 
+(defun pchist2-select--sort-commands (commands)
+  "Sort COMMANDS based on current sort mode."
+  (pcase pchist2-select--sort-mode
+    ('last-used
+     (cl-sort (copy-sequence commands) #'string>
+              :key (lambda (c) (or (alist-get 'last_used c) ""))))
+    ('alphabetically
+     (cl-sort (copy-sequence commands) #'string<
+              :key (lambda (c) (pchist2-select--format-command-full c))))
+    (_ commands)))
+
+(defun pchist2-select--group-by-project (commands)
+  "Group COMMANDS by project, sorting projects alphabetically.
+Within each project group, commands are sorted by current sort mode."
+  (let* ((projects (cl-remove-duplicates
+                    (mapcar (lambda (cmd) (alist-get 'project cmd))
+                            commands)
+                    :test #'string=))
+         (sorted-projects (cl-sort projects #'string<))
+         (result nil))
+    (dolist (project sorted-projects)
+      (let ((project-cmds (cl-remove-if-not
+                           (lambda (cmd)
+                             (string= (alist-get 'project cmd) project))
+                           commands)))
+        (setq result (append result (pchist2-select--sort-commands project-cmds)))))
+    result))
+
 ;;; Formatting
 
 (defun pchist2-select--format-command (cmd)
   "Format CMD for display in select list."
-  (let* ((show-project (pchist2-select--has-multiple-projects))
+  (let* ((show-project (and (not (eq pchist2-select--filter 'global))
+                           (pchist2-select--has-multiple-projects)))
          (cmd-str (pchist2-select--format-command-full cmd))
          (parts nil))
 
-    ;; Add project prefix if multiple projects
+    ;; Add project prefix if multiple projects but NOT in global mode
+    ;; (in global mode, projects are shown as headers)
     (when show-project
       (let* ((project (alist-get 'project cmd))
              (proj-display (if pchist2-select--show-full-paths
@@ -181,6 +216,13 @@
         (current-cmd (pchist2-select--get-command-at-point))
         (inhibit-read-only t))
 
+    ;; Apply sorting/grouping based on filter mode
+    (if (eq pchist2-select--filter 'global)
+        ;; Global mode: group by project (which also sorts within groups)
+        (setq commands (pchist2-select--group-by-project commands))
+      ;; Other modes: just sort
+      (setq commands (pchist2-select--sort-commands commands)))
+
     (setq pchist2-select--commands commands)
     (erase-buffer)
 
@@ -189,8 +231,20 @@
 
     ;; Command list
     (if commands
-        (let ((num 1))
+        (let ((num 1)
+              (last-project nil))
           (dolist (cmd commands)
+            ;; Insert project header if we're in global mode and project changed
+            (when (eq pchist2-select--filter 'global)
+              (let ((project (alist-get 'project cmd)))
+                (when (not (equal project last-project))
+                  (when last-project
+                    (insert "\n"))
+                  (insert (propertize
+                           (format "%s:\n" project)
+                           'face 'bold))
+                  (setq last-project project))))
+
             (let ((start (point)))
               (insert (propertize (format "%2d. " num) 'face 'bold))
               (insert (pchist2-select--format-command cmd))
@@ -216,7 +270,7 @@
   (insert "\n\n")
 
   ;; Filter info
-  (insert (propertize "Filter:  " 'face 'bold))
+  (insert (propertize "Filter:   " 'face 'bold))
   (let ((filter-desc (pchist2-format-filter-description
                       pchist2-select--filter
                       pchist2-select--specific-project
@@ -224,10 +278,17 @@
     (insert filter-desc))
   (insert "\n")
 
-  (insert (propertize "Display: " 'face 'bold))
+  (insert (propertize "Artifact: " 'face 'bold))
   (insert (if pchist2-select--show-full-paths
-             "Full paths"
-           "Basenames only"))
+             "Full path"
+           "Basename only"))
+  (insert "\n")
+
+  (insert (propertize "Sort:     " 'face 'bold))
+  (insert (pcase pchist2-select--sort-mode
+            ('last-used "Last used")
+            ('alphabetically "Alphabetically")
+            (_ "Unknown")))
   (insert "\n\n"))
 
 (defun pchist2-select--insert-footer ()
@@ -244,14 +305,15 @@
   (insert "  RET         Run command\n")
   (insert "  e           Edit command\n")
   (insert "  c           Create new command\n")
-  (insert "  d           Duplicate command\n")
+  (insert "  d           Duplicate and edit command\n")
   (insert "  D           Duplicate to current project\n")
   (insert "  k           Delete command\n")
   (insert "  K           Clear all commands (with confirmation)\n")
   (insert "\n")
   (insert (propertize "View:\n" 'face 'bold))
   (insert "  f           Cycle filter (current/global/specific project)\n")
-  (insert "  F           Toggle full paths display\n")
+  (insert "  F           Toggle artifact display (basename/full path)\n")
+  (insert "  s           Cycle sort (last used/alphabetically)\n")
   (insert "  g           Refresh list\n")
   (insert "\n")
   (insert (propertize "Navigation:\n" 'face 'bold))
@@ -333,6 +395,16 @@
   (setq pchist2-select--show-full-paths (not pchist2-select--show-full-paths))
   (pchist2-select--refresh))
 
+(defun pchist2-select-cycle-sort ()
+  "Cycle through sort modes."
+  (interactive)
+  (setq pchist2-select--sort-mode
+        (pcase pchist2-select--sort-mode
+          ('last-used 'alphabetically)
+          ('alphabetically 'last-used)
+          (_ 'last-used)))
+  (pchist2-select--refresh))
+
 ;;; Interactive Commands
 
 (defun pchist2-select-run ()
@@ -342,6 +414,8 @@
     (if cmd
         (let ((command-string (pchist2-format-command-for-execution cmd))
               (default-directory (alist-get 'project cmd)))
+          ;; Update last_used timestamp
+          (pchist2-touch-command cmd)
           (pchist2--restore-windows)
           (projectile-run-compilation command-string))
       (user-error "No command at point"))))
@@ -474,12 +548,13 @@ Key bindings:
   RET - Run the selected command
   e   - Edit selected command
   c   - Create new command
-  d   - Duplicate command
+  d   - Duplicate and edit command
   D   - Duplicate to current project
   k   - Delete command
   K   - Clear all commands
   f   - Cycle filter
-  F   - Toggle full paths
+  F   - Toggle artifact display (basename/full path)
+  s   - Cycle sort (last used/alphabetically)
   ?   - Toggle help
   n/p - Next/previous command
   g   - Refresh list
@@ -495,6 +570,7 @@ Key bindings:
       ;; Reset to defaults
       (setq pchist2-select--filter 'current-project)
       (setq pchist2-select--show-full-paths nil)
+      (setq pchist2-select--sort-mode 'last-used)
       (setq pchist2-select--help-visible nil)
       (pchist2-select--refresh)
       ;; Capture whether we have commands (in buffer-local context)

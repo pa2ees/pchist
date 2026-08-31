@@ -61,6 +61,7 @@
     (define-key map (kbd "TAB") #'pchist2-edit-next-field)
     (define-key map (kbd "<backtab>") #'pchist2-edit-previous-field)
     (define-key map (kbd "?") #'pchist2-edit-toggle-help)
+    (define-key map (kbd "g") #'pchist2-edit--render)
     (define-key map (kbd "C-c C-c") #'pchist2-edit-save)
     (define-key map (kbd "C-c C-k") #'pchist2-edit-cancel)
     (define-key map (kbd "q") #'pchist2-edit-cancel)
@@ -80,6 +81,7 @@
 
 (defun pchist2-edit--render ()
   "Render the edit buffer."
+  (interactive)
   (let ((inhibit-read-only t)
         (pos (point)))
     (erase-buffer)

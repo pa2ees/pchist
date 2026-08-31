@@ -27,9 +27,10 @@
 ;;   RET     - Run the selected command
 ;;   e       - Edit selected command
 ;;   c       - Create new command
-;;   d       - Duplicate and modify selected command
+;;   d       - Duplicate and edit selected command
 ;;   k       - Delete selected command
 ;;   f       - Cycle filter (current / specific / global)
+;;   s       - Cycle sort (last used / alphabetically)
 ;;   g       - Refresh list
 ;;   q       - Quit
 ;;
@@ -39,6 +40,7 @@
 ;;   i       - Add installer
 ;;   k       - Delete item at point
 ;;   n/p     - Navigate between fields
+;;   g       - Refresh display
 ;;   C-c C-c - Save changes
 ;;   C-c C-k - Cancel
 
@@ -53,6 +55,12 @@
 ;;;###autoload
 (defalias 'pchist2-compile #'pchist2-ui-select-command
   "Main entry point for pchist2 compile history.")
+
+;;;###autoload
+(defun pchist2-compile-command (&optional _arg)
+  "Compile command entry point (ignores prefix ARG for compatibility)."
+  (interactive "P")
+  (pchist2-ui-select-command))
 
 (provide 'pchist2)
 ;;; pchist2.el ends here

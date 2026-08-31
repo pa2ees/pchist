@@ -80,8 +80,7 @@ Uses make-directory for atomic lock creation."
          ;; Lock exists, check if stale
          (when (file-exists-p lock-file)
            (condition-case nil
-               (let* ((pid-file (expand-file-name "pid" lock-file))
-                      (attrs (file-attributes lock-file))
+               (let* ((attrs (file-attributes lock-file))
                       (lock-age (- (float-time) (float-time (nth 5 attrs)))))
                  ;; If lock is older than timeout * 2, consider it stale
                  (when (> lock-age (* 2 pchist2-lock-timeout))
@@ -295,6 +294,19 @@ Returns the updated command alist."
     (setf (alist-get 'last_used cmd) (format-time-string "%Y-%m-%dT%H:%M:%S.%6N"))
     (pchist2-save)
     cmd))
+
+(defun pchist2-touch-command (cmd)
+  "Update the last_used timestamp for CMD without changing any fields.
+CMD is a command alist (typically obtained from pchist2-get-commands).
+Returns the updated command alist."
+  (pchist2--ensure-loaded)
+  (let ((found-cmd (cl-find cmd pchist2--commands)))
+    (unless found-cmd
+      (error "Command not found: %S" cmd))
+    ;; Update timestamp
+    (setf (alist-get 'last_used found-cmd) (format-time-string "%Y-%m-%dT%H:%M:%S.%6N"))
+    (pchist2-save)
+    found-cmd))
 
 (defun pchist2-delete-command (cmd)
   "Delete CMD from the history.
