@@ -42,6 +42,9 @@
 (defvar pchist2--saved-window-config nil
   "Saved window configuration to restore on quit.")
 
+(defvar-local pchist2--default-directory nil
+  "Default directory to use when running commands from this buffer.")
+
 ;;; Mode Definition
 
 (defvar pchist2-select-mode-map
@@ -417,11 +420,13 @@ Within each project group, commands are sorted by current sort mode."
   (let ((cmd (pchist2-select--get-command-at-point)))
     (if cmd
         (let ((command-string (pchist2-format-command-for-execution cmd))
-              (default-directory (alist-get 'project cmd)))
+              (run-directory pchist2--default-directory))
           ;; Update last_used timestamp
           (pchist2-touch-command cmd)
           (pchist2--restore-windows)
-          (projectile-run-compilation command-string))
+          ;; Use the saved default-directory from when pchist2 was invoked
+          (let ((default-directory run-directory))
+            (projectile-run-compilation command-string)))
       (user-error "No command at point"))))
 
 (defun pchist2-select-edit ()
@@ -568,9 +573,12 @@ Key bindings:
 
   ;; Create or switch to buffer
   (let ((buffer (get-buffer-create "*pchist2-commands*"))
-        (has-commands nil))
+        (has-commands nil)
+        (invocation-dir default-directory))
     (with-current-buffer buffer
       (pchist2-select-mode)
+      ;; Capture the directory from which we were invoked
+      (setq pchist2--default-directory invocation-dir)
       ;; Reset to defaults
       (setq pchist2-select--filter 'current-project)
       (setq pchist2-select--show-full-paths nil)
