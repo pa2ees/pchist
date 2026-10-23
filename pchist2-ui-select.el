@@ -93,7 +93,7 @@
 Returns unsorted commands - sorting/grouping is done in refresh."
   (pcase pchist2-select--filter
     ('current-project
-     (let ((project-root (projectile-project-root)))
+     (let ((project-root (projectile-project-root pchist2--default-directory)))
        (if project-root
            (pchist2-get-commands project-root)
          (message "Not in a projectile project")
@@ -281,7 +281,7 @@ Within each project group, commands are sorted by current sort mode."
   (let ((filter-desc (pchist2-format-filter-description
                       pchist2-select--filter
                       pchist2-select--specific-project
-                      (projectile-project-root))))
+                      (projectile-project-root pchist2--default-directory))))
     (insert filter-desc))
   (insert "\n")
 
@@ -443,7 +443,7 @@ Within each project group, commands are sorted by current sort mode."
   "Create a new command."
   (interactive)
   (require 'pchist2-ui-edit)
-  (let ((project-root (or (projectile-project-root)
+  (let ((project-root (or (projectile-project-root pchist2--default-directory)
                           (read-directory-name "Project root: "))))
     (pchist2-edit-command nil nil project-root)))
 
@@ -461,7 +461,7 @@ Within each project group, commands are sorted by current sort mode."
   "Duplicate the command at point to the current project."
   (interactive)
   (let ((cmd (pchist2-select--get-command-at-point))
-        (current-project (projectile-project-root)))
+        (current-project (projectile-project-root pchist2--default-directory)))
     (unless cmd
       (user-error "No command at point"))
     (unless current-project
