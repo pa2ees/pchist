@@ -447,7 +447,13 @@ VALUE is the display value."
                                     pchist2-edit--command)))
     (when (and new-val (not (string-empty-p new-val)))
       (setq pchist2-edit--command (string-trim new-val))
-      (pchist2-edit--render))))
+      (pchist2-edit--render)
+      ;; Return to command field
+      (goto-char (point-min))
+      (while (and (not (eobp))
+                  (not (eq (pchist2-edit--get-field-at-point) 'command)))
+        (forward-line 1))
+      (beginning-of-line))))
 
 ;;; Switch Fields
 
@@ -459,9 +465,11 @@ VALUE is the display value."
                       pchist2-edit--command))
          (new-val (pchist2-complete "Switch: " candidates nil)))
     (when (and new-val (not (string-empty-p new-val)))
-      (setq pchist2-edit--switches
-            (append pchist2-edit--switches (list (string-trim new-val))))
-      (pchist2-edit--render))))
+      (let ((new-idx (length pchist2-edit--switches)))
+        (setq pchist2-edit--switches
+              (append pchist2-edit--switches (list (string-trim new-val))))
+        (pchist2-edit--render)
+        (pchist2-edit--goto-switch new-idx)))))
 
 (defun pchist2-edit--modify-switch ()
   "Modify a switch."
@@ -474,7 +482,8 @@ VALUE is the display value."
          (new-val (pchist2-complete "Switch: " candidates current)))
     (when (and new-val (not (string-empty-p new-val)))
       (setf (nth idx pchist2-edit--switches) (string-trim new-val))
-      (pchist2-edit--render))))
+      (pchist2-edit--render)
+      (pchist2-edit--goto-switch idx))))
 
 (defun pchist2-edit--delete-switch (idx)
   "Delete switch at IDX."
@@ -521,9 +530,11 @@ VALUE is the display value."
                       pchist2-edit--command))
          (new-val (pchist2-complete "Target: " candidates nil)))
     (when (and new-val (not (string-empty-p new-val)))
-      (setq pchist2-edit--targets
-            (append pchist2-edit--targets (list (string-trim new-val))))
-      (pchist2-edit--render))))
+      (let ((new-idx (length pchist2-edit--targets)))
+        (setq pchist2-edit--targets
+              (append pchist2-edit--targets (list (string-trim new-val))))
+        (pchist2-edit--render)
+        (pchist2-edit--goto-target new-idx)))))
 
 (defun pchist2-edit--modify-target ()
   "Modify a target."
@@ -536,7 +547,8 @@ VALUE is the display value."
          (new-val (pchist2-complete "Target: " candidates current)))
     (when (and new-val (not (string-empty-p new-val)))
       (setf (nth idx pchist2-edit--targets) (string-trim new-val))
-      (pchist2-edit--render))))
+      (pchist2-edit--render)
+      (pchist2-edit--goto-target idx))))
 
 (defun pchist2-edit--delete-target (idx)
   "Delete target at IDX."
@@ -588,10 +600,12 @@ VALUE is the display value."
                             (switches . nil)
                             (artifacts . nil)
                             (host . nil)
-                            (dest_path . nil))))
+                            (dest_path . nil)))
+            (new-idx (length pchist2-edit--installers)))
         (setq pchist2-edit--installers
               (append pchist2-edit--installers (list new-installer)))
-        (pchist2-edit--render)))))
+        (pchist2-edit--render)
+        (pchist2-edit--goto-installer new-idx)))))
 
 (defun pchist2-edit--delete-installer (idx)
   "Delete installer at IDX."
@@ -643,7 +657,14 @@ VALUE is the display value."
          (new-val (pchist2-complete "Installer command: " candidates current)))
     (when (and new-val (not (string-empty-p new-val)))
       (setf (alist-get 'command installer) (string-trim new-val))
-      (pchist2-edit--render))))
+      (pchist2-edit--render)
+      ;; Return to the installer-command field
+      (goto-char (point-min))
+      (while (and (not (eobp))
+                  (not (and (eq (pchist2-edit--get-field-at-point) 'installer-command)
+                            (equal (pchist2-edit--get-field-index-at-point) idx))))
+        (forward-line 1))
+      (beginning-of-line))))
 
 (defun pchist2-edit--add-installer-switch ()
   "Add a switch to the current installer."
@@ -653,10 +674,12 @@ VALUE is the display value."
          (installer (nth idx pchist2-edit--installers))
          (new-val (read-string "Installer switch: ")))
     (when (and new-val (not (string-empty-p new-val)))
-      (let ((switches (alist-get 'switches installer)))
+      (let* ((switches (alist-get 'switches installer))
+             (new-sw-idx (length switches)))
         (setf (alist-get 'switches installer)
               (append switches (list (string-trim new-val))))
-        (pchist2-edit--render)))))
+        (pchist2-edit--render)
+        (pchist2-edit--goto-installer-switch idx new-sw-idx)))))
 
 (defun pchist2-edit--modify-installer-switch ()
   "Modify an installer switch."
@@ -669,7 +692,8 @@ VALUE is the display value."
          (new-val (read-string "Installer switch: " current)))
     (when (and new-val (not (string-empty-p new-val)))
       (setf (nth sw-idx switches) (string-trim new-val))
-      (pchist2-edit--render))))
+      (pchist2-edit--render)
+      (pchist2-edit--goto-installer-switch inst-idx sw-idx))))
 
 (defun pchist2-edit--delete-installer-switch (indices)
   "Delete installer switch at INDICES (cons of inst-idx . sw-idx)."
@@ -724,10 +748,12 @@ VALUE is the display value."
          (installer (nth idx pchist2-edit--installers))
          (new-val (read-file-name "Artifact path: " pchist2-edit--project)))
     (when (and new-val (not (string-empty-p new-val)))
-      (let ((artifacts (alist-get 'artifacts installer)))
+      (let* ((artifacts (alist-get 'artifacts installer))
+             (new-art-idx (length artifacts)))
         (setf (alist-get 'artifacts installer)
               (append artifacts (list new-val)))
-        (pchist2-edit--render)))))
+        (pchist2-edit--render)
+        (pchist2-edit--goto-installer-artifact idx new-art-idx)))))
 
 (defun pchist2-edit--modify-installer-artifact ()
   "Modify an installer artifact."
@@ -740,7 +766,8 @@ VALUE is the display value."
          (new-val (read-file-name "Artifact path: " pchist2-edit--project nil nil current)))
     (when (and new-val (not (string-empty-p new-val)))
       (setf (nth art-idx artifacts) new-val)
-      (pchist2-edit--render))))
+      (pchist2-edit--render)
+      (pchist2-edit--goto-installer-artifact inst-idx art-idx))))
 
 (defun pchist2-edit--delete-installer-artifact (indices)
   "Delete installer artifact at INDICES (cons of inst-idx . art-idx)."
@@ -799,7 +826,14 @@ VALUE is the display value."
           (if (or (null new-val) (string-empty-p new-val))
               nil
             (string-trim new-val)))
-    (pchist2-edit--render)))
+    (pchist2-edit--render)
+    ;; Return to the installer-host field
+    (goto-char (point-min))
+    (while (and (not (eobp))
+                (not (and (eq (pchist2-edit--get-field-at-point) 'installer-host)
+                          (equal (pchist2-edit--get-field-index-at-point) idx))))
+      (forward-line 1))
+    (beginning-of-line)))
 
 (defun pchist2-edit--modify-installer-dest ()
   "Modify installer destination path field."
@@ -809,7 +843,14 @@ VALUE is the display value."
          (new-val (read-string "Destination path: " current)))
     (setf (alist-get 'dest_path installer)
           (if (string-empty-p new-val) nil (string-trim new-val)))
-    (pchist2-edit--render)))
+    (pchist2-edit--render)
+    ;; Return to the installer-dest field
+    (goto-char (point-min))
+    (while (and (not (eobp))
+                (not (and (eq (pchist2-edit--get-field-at-point) 'installer-dest)
+                          (equal (pchist2-edit--get-field-index-at-point) idx))))
+      (forward-line 1))
+    (beginning-of-line)))
 
 ;;; Save/Cancel
 
